@@ -45,13 +45,15 @@ class File(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # The file field could store the file path or URL.
     file_path = db.Column(db.String(255), nullable=False)
+    file_extension = db.Column(db.String(20), nullable=False)
     # Optional JSON field to store extra file metadata.
     metadata = db.Column(db.JSON, nullable=True)
     # Optionally associate this file with a conversation.
     conversation_id = db.Column(
         db.Integer, db.ForeignKey("conversation.id"), nullable=True
     )
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Field to confirm whether the file has been uploaded.
+    is_uploaded = db.Column(db.Boolean, default=False, nullable=False)
 
     def __repr__(self):
         return f"<File {self.id} at {self.created_at}>"
