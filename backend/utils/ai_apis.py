@@ -1,7 +1,9 @@
 # ai_apis.py
 import requests
+from openai import OpenAI
 
-def openai_api_logic(file_text, additional_params=None):
+
+def openai_api_logic(text, additional_params=None):
     """
     Generic OpenAI API logic that can generate metadata, embeddings, or chat messages,
     based on the provided endpoint or parameters.
@@ -13,50 +15,31 @@ def openai_api_logic(file_text, additional_params=None):
     Returns:
         dict: The API response.
     """
-    # Default endpoint for metadata generation
-    endpoint = additional_params.get("endpoint") if additional_params else None
-    if not endpoint:
-        # Provide a default endpoint (this might be for metadata or embeddings)
-        endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions"
-    
-    headers = {
-        "Authorization": "Bearer YOUR_OPENAI_API_KEY",
-        "Content-Type": "application/json"
-    }
+    client = OpenAI()
     
     # Build the payload. Adjust keys based on the API you are using.
     payload = {
-        "prompt": file_text,
-        "max_tokens": 50,   # Default value; may be overridden by additional_params
-    }
+        "prompt": text,
+        }
     
     if additional_params:
         payload.update(additional_params)
     
-    response = requests.post(endpoint, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()
-
-def another_api_logic(file_text, additional_params=None):
-    """
-    Example of another API logic function. Replace with your actual logic.
-    """
-    api_url = "https://api.another-ai.com/metadata"
-    headers = {
-        "Authorization": "Bearer YOUR_ANOTHER_API_KEY",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "text": file_text,
-    }
-    if additional_params:
-        payload.update(additional_params)
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {
+                "role": "user",
+                "content": payload['prompt']
+            }
+        ]
+    )
     
-    response = requests.post(api_url, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()
+    return completion.choices[0].message
 
-def send_to_api(file_text, api_logic_func, additional_params=None):
+
+def send_to_api(text, api_logic_func, additional_params=None):
     """
     Interface layer that sends file_text to a chosen API using the provided api_logic_func.
     
@@ -69,7 +52,7 @@ def send_to_api(file_text, api_logic_func, additional_params=None):
         dict: The response from the API.
     """
     try:
-        result = api_logic_func(file_text, additional_params)
+        result = api_logic_func(text, additional_params)
         return result
     except Exception as e:
         # Log the error as needed.

@@ -59,21 +59,18 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     # Prepare additional parameters for the chat response that includes the updated summary.
     # Here, we add a "context" field to additional_params to supply the conversation summary to the AI API.
     chat_params = additional_params.copy() if additional_params else {}
-    chat_params.setdefault("prompt", f"Context:\n{updated_summary}\n\nUser: {frontend_message}\nAI:")
-    # Adjust other parameters like "max_tokens", etc., as required.
     
     # Step 4: Process the chat message via the AI API, using the updated context.
     ai_api_response = send_to_api(frontend_message, openai_api_logic, chat_params)
     
     # Extract the AI reply text. (Adjust the key as per your API response structure.)
-    ai_reply_text = ai_api_response.get("text", "No response") if ai_api_response else "No response"
+    ai_reply_text = ai_api_response if ai_api_response else "No response"
     
     # Step 5: Store the AI's response in the conversation.
     ai_message = ConversationMessage(
         conversation_id=conversation_id,
         sender='ai',
-        message=ai_reply_text,
-        metadata=ai_api_response  # Optionally store full API response as metadata.
+        message=ai_reply_text.content
     )
     db.session.add(ai_message)
     db.session.commit()
@@ -136,7 +133,8 @@ def summarize_conversation(conversation_id, new_message, additional_params=None)
 
     # Extract the summary text from the API response.
     # Adjust the extraction logic based on your API's response structure.
-    new_summary = api_response.get("text", "No summary generated.") if api_response else "No summary generated."
+    new_summary = api_response.content if api_response else "No summary generated."
+    print(new_summary)
 
     # Update the conversation's metadata with the new summary.
     conversation.meta_data = conversation.meta_data or {}

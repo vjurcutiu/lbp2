@@ -1,5 +1,5 @@
 # chat_routes.py
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from utils.comms import process_chat_message
 
 # Create a blueprint for chat routes.
@@ -35,7 +35,8 @@ def chat():
     try:
         # Process the incoming chat message using our chat logic.
         result = process_chat_message(frontend_message, conversation_id, additional_params)
-        return jsonify(result), 200
+        return result['ai_response'].content, 200
     except Exception as e:
-        # Log the exception as needed.
-        return jsonify({"error": str(e)}), 500
+        # Log the exception with a traceback for debugging
+        current_app.logger.error("Error processing chat message", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
