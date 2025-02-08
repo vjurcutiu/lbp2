@@ -1,7 +1,7 @@
 // src/components/chat/ChatContainer.jsx
 import React, { useState } from 'react';
 import ChatHeader from '../common/ChatHeader';
-import ChatWindow from '../common/ChatWindow';
+import ChatWindow from './ChatWindow';
 import ChatInput from '../common/ChatInput';
 import { sendChatMessage } from '../../services/api';
 
