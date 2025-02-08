@@ -8,7 +8,7 @@ class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=True)
     # JSON field to store additional conversation-specific metadata.
-    metadata = db.Column(db.JSON, nullable=True)
+    meta_data = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -33,7 +33,7 @@ class ConversationMessage(db.Model):
     sender = db.Column(db.String(100), nullable=False)
     message = db.Column(db.Text, nullable=False)
     # Optional JSON field for additional metadata related to the message.
-    metadata = db.Column(db.JSON, nullable=True)
+    meta_data = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
@@ -47,7 +47,7 @@ class File(db.Model):
     file_path = db.Column(db.String(255), nullable=False)
     file_extension = db.Column(db.String(20), nullable=False)
     # Optional JSON field to store extra file metadata.
-    metadata = db.Column(db.JSON, nullable=True)
+    meta_data = db.Column(db.JSON, nullable=True)
     # Optionally associate this file with a conversation.
     conversation_id = db.Column(
         db.Integer, db.ForeignKey("conversation.id"), nullable=True

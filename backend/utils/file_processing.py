@@ -1,7 +1,7 @@
 import os
 from db.models import db, File
-from ai_apis import send_to_api, openai_api_logic  # You can swap out openai_api_logic with another API function as needed
-from vector_apis import send_to_vector_db, pinecone_vector_logic
+from utils.ai_apis import send_to_api, openai_api_logic  # You can swap out openai_api_logic with another API function as needed
+from utils.vector_apis import send_to_vector_db, pinecone_vector_logic
 
 
 def scan_and_add_files(folder_path, extension, conversation_id=None):
@@ -134,7 +134,7 @@ def get_files_without_metadata_text():
             - 'contents': The text extracted from the file.
     """
     # Query for files that have no metadata.
-    files_without_metadata = File.query.filter(File.metadata.is_(None)).all()
+    files_without_metadata = File.query.filter(File.meta_data.is_(None)).all()
     
     results = []
     for file_entry in files_without_metadata:
@@ -160,7 +160,7 @@ def process_files_for_metadata():
         list[dict]: A list of results from the API for each processed file.
     """
     # Query for files that need metadata generation (e.g., metadata field is None)
-    files_to_process = File.query.filter(File.metadata.is_(None)).all()
+    files_to_process = File.query.filter(File.meta_data.is_(None)).all()
     
     results = []
     for file_entry in files_to_process:
@@ -173,7 +173,7 @@ def process_files_for_metadata():
                 
                 if api_response is not None:
                     # Update the file metadata in the database based on the API response.
-                    file_entry.metadata = api_response
+                    file_entry.meta_data = api_response
                     results.append({
                         "file_path": file_entry.file_path,
                         "api_response": api_response
@@ -200,14 +200,14 @@ def upsert_files_to_vector_db():
                     the response from the vector API.
     """
     # Query for files that have metadata and have not been uploaded to the vector database.
-    files_to_upsert = File.query.filter(File.metadata.isnot(None), File.is_uploaded == False).all()
+    files_to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
     
     results = []
     for file_entry in files_to_upsert:
         if os.path.exists(file_entry.file_path):
             # Here you can choose to use metadata or re-extract text for embeddings.
             # For this example, we use file metadata as the source text.
-            file_text = file_entry.metadata.get("summary", "") if isinstance(file_entry.metadata, dict) else ""
+            file_text = file_entry.meta_data.get("summary", "") if isinstance(file_entry.meta_data, dict) else ""
             
             if file_text:
                 # Set additional parameters, including an endpoint for embeddings generation.

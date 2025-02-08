@@ -1,6 +1,6 @@
 # comms.py
 from db.models import db, Conversation, ConversationMessage
-from ai_apis import send_to_api, openai_api_logic
+from utils.ai_apis import send_to_api, openai_api_logic
 
 def process_chat_message(frontend_message, conversation_id=None, additional_params=None):
     """
@@ -107,8 +107,8 @@ def summarize_conversation(conversation_id, new_message, additional_params=None)
 
     # Prepare the base context.
     # If a summary already exists in metadata, use it. Otherwise, build context from all messages.
-    if conversation.metadata and conversation.metadata.get("summary"):
-        base_context = conversation.metadata.get("summary")
+    if conversation.meta_data and conversation.meta_data.get("summary"):
+        base_context = conversation.meta_data.get("summary")
     else:
         # Build context from all messages if no summary exists.
         # (For brevity, we assume a method exists to get a full conversation context.
@@ -139,8 +139,8 @@ def summarize_conversation(conversation_id, new_message, additional_params=None)
     new_summary = api_response.get("text", "No summary generated.") if api_response else "No summary generated."
 
     # Update the conversation's metadata with the new summary.
-    conversation.metadata = conversation.metadata or {}
-    conversation.metadata["summary"] = new_summary
+    conversation.meta_data = conversation.meta_data or {}
+    conversation.meta_data["summary"] = new_summary
 
     try:
         db.session.commit()
