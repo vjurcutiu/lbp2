@@ -148,3 +148,11 @@ def summarize_conversation(conversation_id, new_message, additional_params=None)
 
     return new_summary
 
+    
+def get_all_conversation_ids():
+    """
+    Retrieve all conversation IDs from the database.
+    Returns a list of IDs.
+    """
+    conversations = Conversation.query.all()
+    return [conversation.id for conversation in conversations]

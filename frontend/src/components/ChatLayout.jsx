@@ -1,29 +1,46 @@
 // src/components/ChatLayout.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ConversationSidebar from './common/ConversationSidebar';
 import ChatContainer from './chat/ChatContainer';
-import { processFolder } from '../services/api'; // your API call for processing folder
+import { getConversationIds, processFolder } from '../services';
 
 const ChatLayout = () => {
-  const [conversations, setConversations] = useState([
-    { id: 1, title: 'Support Chat' },
-    { id: 2, title: 'Project Discussion' },
-    { id: 3, title: 'Random Chat' },
-  ]);
-  const [activeConversationId, setActiveConversationId] = useState(conversations[0].id);
+  // Start with an empty conversation list; we'll populate it via the API.
+  const [conversations, setConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState(null);
+
+  // Fetch conversation IDs from the backend on component mount.
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        // Get an array of conversation IDs from the backend.
+        const ids = await getConversationIds();
+        // Map the IDs to conversation objects with default titles.
+        const convs = ids.map(id => ({ id, title: `Conversation ${id}` }));
+        setConversations(convs);
+        // Set the first conversation as active if available.
+        if (convs.length > 0) {
+          setActiveConversationId(convs[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching conversation ids:", error);
+      }
+    };
+
+    fetchConversations();
+  }, []);
 
   const handleSelectConversation = (conversationId) => {
     setActiveConversationId(conversationId);
-    // Load the selected conversation's details if needed
+    // You can add additional logic here if needed (for example, loading conversation details).
   };
 
   const handleFolderImport = (folderName) => {
-    // Call your backend API using the folderName
-    // For example, using the processFolder API function:
+    // Call your backend API using the folder name.
     processFolder({ folder_path: folderName, extension: '.txt' })
       .then((res) => {
         console.log('Folder processed:', res);
-        // Optionally update your conversations list based on the new data
+        // Optionally update your conversations list based on new data.
       })
       .catch((err) => console.error('Error processing folder:', err));
   };

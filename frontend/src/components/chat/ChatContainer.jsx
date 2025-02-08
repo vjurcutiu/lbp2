@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import ChatHeader from '../common/ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from '../common/ChatInput';
-import { sendChatMessage } from '../../services/api';
+import { sendChatMessage } from '../../services';
 
 const ChatContainer = () => {
   const [messages, setMessages] = useState([
