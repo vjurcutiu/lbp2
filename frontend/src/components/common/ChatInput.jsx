@@ -8,7 +8,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSend();
+      onSend(value);
     }
   };
 
@@ -21,9 +21,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
         onKeyPress={handleKeyPress}
         style={{ flex: 1, marginRight: '8px' }}
       />
-      <Button onClick={onSend} disabled={disabled}>
-        Send
-      </Button>
+      <Button onClick={() => onSend(value)}>Send</Button>
     </div>
   );
 };
