@@ -1,6 +1,8 @@
 # comms.py
 from db.models import db, Conversation, ConversationMessage
 from utils.ai_apis import send_to_api, openai_api_logic
+import datetime
+import pendulum
 
 def process_chat_message(frontend_message, conversation_id=None, additional_params=None):
     """
@@ -156,3 +158,23 @@ def get_all_conversation_ids():
     """
     conversations = Conversation.query.all()
     return [conversation.id for conversation in conversations]
+
+def model_to_dict(instance):
+    result = {}
+    for column in instance.__table__.columns:
+        value = getattr(instance, column.name)
+        if isinstance(value, datetime.datetime):
+            # Convert the datetime object into a Pendulum object and then format it.
+            value = pendulum.instance(value).to_iso8601_string()
+        result[column.name] = value
+    return result
+
+def get_all_messages_for_conversation(conversation_id):
+    """
+    Retrieve all messages for a given conversation ID.
+    
+    :param conversation_id: The ID of the conversation.
+    :return: A list of dictionaries representing the messages.
+    """
+    messages = ConversationMessage.query.filter_by(conversation_id=conversation_id).all()
+    return [model_to_dict(message) for message in messages]

@@ -1,6 +1,6 @@
 # chat_routes.py
 from flask import Blueprint, request, jsonify, current_app
-from utils.comms import process_chat_message, get_all_conversation_ids
+from utils.comms import process_chat_message, get_all_conversation_ids, get_all_messages_for_conversation
 
 # Create a blueprint for chat routes.
 chat_bp = Blueprint('chat', __name__)
@@ -54,3 +54,18 @@ def conversation_ids_route():
     except Exception as e:
         current_app.logger.error("Error fetching conversation ids", exc_info=True)
         return jsonify({"error": "Failed to fetch conversation ids"}), 500
+    
+@chat_bp.route('/<int:conversation_id>/messages', methods=['GET'])
+def get_conversation_messages(conversation_id):
+    """
+    Retrieve all messages for the conversation with the given ID.
+    
+    Returns a JSON response in the following format:
+      { "messages": [ { ... }, { ... }, ... ] }
+    """
+    try:
+        messages = get_all_messages_for_conversation(conversation_id)
+        return jsonify({"messages": messages}), 200
+    except Exception as e:
+        current_app.logger.error("Error fetching messages for conversation %s: %s", conversation_id, e, exc_info=True)
+        return jsonify({"error": "Failed to retrieve messages for conversation."}), 500
