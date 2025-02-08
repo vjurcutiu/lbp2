@@ -1,0 +1,41 @@
+# chat_routes.py
+from flask import Blueprint, request, jsonify
+from utils.comms import process_chat_message
+
+# Create a blueprint for chat routes.
+chat_bp = Blueprint('chat', __name__)
+
+@chat_bp.route('/chat', methods=['POST'])
+def chat():
+    """
+    Endpoint to process chat messages from the frontend.
+    
+    Expected JSON payload:
+        {
+            "message": "User message text",
+            "conversation_id": <optional conversation id>,
+            "additional_params": <optional dict with extra parameters>
+        }
+    
+    Returns a JSON response with the updated conversation details,
+    including the AI's response and the updated conversation context (summary).
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request, JSON required."}), 400
+
+    # Retrieve required and optional parameters from the payload.
+    frontend_message = data.get("message")
+    if not frontend_message:
+        return jsonify({"error": "No message provided."}), 400
+
+    conversation_id = data.get("conversation_id")
+    additional_params = data.get("additional_params", {})
+
+    try:
+        # Process the incoming chat message using our chat logic.
+        result = process_chat_message(frontend_message, conversation_id, additional_params)
+        return jsonify(result), 200
+    except Exception as e:
+        # Log the exception as needed.
+        return jsonify({"error": str(e)}), 500
