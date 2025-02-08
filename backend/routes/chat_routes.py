@@ -35,7 +35,7 @@ def chat():
     try:
         # Process the incoming chat message using our chat logic.
         result = process_chat_message(frontend_message, conversation_id, additional_params)
-        return result['ai_response'].content, 200
+        return result, 200
     except Exception as e:
         # Log the exception with a traceback for debugging
         current_app.logger.error("Error processing chat message", exc_info=True)

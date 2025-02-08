@@ -22,8 +22,9 @@ const ChatContainer = () => {
     try {
       // Call the API to send the chat message
       const response = await sendChatMessage({ message: trimmedInput });
+      console.log(response)
       // Assume the response contains an object like { ai_response: { text: '...' } }
-      const aiReply = { sender: 'ai', text: response.ai_response?.text || 'No response' };
+      const aiReply = { sender: 'ai', text: response.ai_response || 'No response' };
       setMessages((prevMessages) => [...prevMessages, aiReply]);
     } catch (error) {
       console.error('Error sending chat message:', error);

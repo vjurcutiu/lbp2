@@ -78,7 +78,7 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     return {
         "conversation_id": conversation_id,
         "user_message": frontend_message,
-        "ai_response": ai_api_response,
+        "ai_response": ai_message.message,
         "context": updated_summary
     }
 
