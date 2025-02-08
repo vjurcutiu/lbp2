@@ -29,7 +29,7 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
       // Map the API response to our message format. Adjust the keys based on your API.
       const aiReply = { 
         sender: 'ai', 
-        message: response.ai_response?.message || 'No response',
+        message: response.ai_response || 'No response',
         created_at: response.ai_response?.created_at || new Date().toISOString()
       };
       updateMessages(prevMessages => [...prevMessages, aiReply]);
