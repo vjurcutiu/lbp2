@@ -2,21 +2,33 @@
 import React, { useRef } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * FolderBrowseButton renders a button that, when clicked,
- * opens a file dialog that allows the user to select a folder.
- * 
- * In a standard browser, the file input with the "webkitdirectory" attribute
- * will return a FileList with relative paths. This component extracts the first
- * folder name (as an approximation) and passes it to the onFolderSelect callback.
- * 
- * In an Electron (or similar) environment, you might replace this implementation
- * with one that uses native file dialogs to obtain an absolute folder path.
- */
 const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
+  // Check if we're running in Electron by detecting the exposed API
+  const isElectron = !!(window.electronAPI && window.electronAPI.selectFolderOrFile);
   const fileInputRef = useRef(null);
 
-  const handleClick = () => {
+  // This function is used when running in Electron
+  const handleElectronSelect = async () => {
+    try {
+      const selectedPaths = await window.electronAPI.selectFolderOrFile();
+      if (selectedPaths && selectedPaths.length > 0) {
+        // If one item is selected, pass it as a string; if multiple, pass the array.
+        if (selectedPaths.length === 1) {
+          onFolderSelect(selectedPaths[0]);
+        } else {
+          onFolderSelect(selectedPaths);
+        }
+      } else {
+        throw new Error("No files or folders selected.");
+      }
+    } catch (error) {
+      console.error("Error selecting folder or file:", error);
+      if (onError) onError(error);
+    }
+  };
+
+  // This function is used when not in Electron (i.e., fallback for browsers)
+  const handleBrowserSelect = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     } else {
@@ -26,41 +38,37 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
     }
   };
 
-  const handleChange = async (e) => {
+  // Decide which handler to use when the button is clicked
+  const handleClick = async () => {
+    if (isElectron) {
+      await handleElectronSelect();
+    } else {
+      handleBrowserSelect();
+    }
+  };
+
+  // Fallback handler for when a file is selected in the browser
+  const handleChange = (e) => {
     try {
       const files = e.target.files;
       if (!files || files.length === 0) {
         throw new Error("No files selected.");
       }
-      const firstFile = files[0];
-      if (!firstFile) {
-        throw new Error("No file data available.");
+      // Process the FileList. For example, return an array of file names:
+      const selectedPaths = [];
+      for (let i = 0; i < files.length; i++) {
+        // In a browser, you typically get only file names (and relative paths if webkitdirectory is used)
+        selectedPaths.push(files[i].name);
       }
-
-      let folderPath;
-      if (window.electronAPI) {
-        // In Electron, use the native dialog to get the full folder path.
-        folderPath = await window.electronAPI.selectFolder();
+      // If only one file is selected, send it as a string; otherwise, send the array.
+      if (selectedPaths.length === 1) {
+        onFolderSelect(selectedPaths[0]);
       } else {
-        // In a browser, we can only use the relative path.
-        const relativePath = firstFile.webkitRelativePath || '';
-        if (!relativePath) {
-          throw new Error("Could not determine folder from file path.");
-        }
-        // Extract the first segment as the folder name.
-        folderPath = relativePath.split('/')[0];
+        onFolderSelect(selectedPaths);
       }
-
-      if (!folderPath) {
-        throw new Error("Folder name is empty.");
-      }
-
-      onFolderSelect(folderPath);
     } catch (error) {
       console.error("Error in FolderBrowseButton handleChange:", error);
-      if (onError) {
-        onError(error);
-      }
+      if (onError) onError(error);
     }
   };
 
@@ -69,14 +77,16 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
       <button onClick={handleClick}>
         {buttonText || 'Browse'}
       </button>
-      {/* The input is hidden and uses the "webkitdirectory" attribute for folder selection */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        webkitdirectory="true"
-        style={{ display: 'none' }}
-        onChange={handleChange}
-      />
+      {/* Render the fallback file input only if not running in Electron */}
+      {!isElectron && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple  // Allow selecting multiple files
+          style={{ display: 'none' }}
+          onChange={handleChange}
+        />
+      )}
     </>
   );
 };

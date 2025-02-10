@@ -26,17 +26,15 @@ app.whenReady().then(() => {
   createWindow();
 
   // Register the handler for the 'select-folder' channel
-  ipcMain.handle('select-folder', async () => {
+  ipcMain.handle('select-folder-or-file', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory']  // Allows selecting a folder
+      properties: ['openFile', 'openDirectory', 'multiSelections']
     });
-
-    // If the user cancels the dialog, return null.
     if (result.canceled) {
       return null;
     }
-
-    return result.filePaths[0]; // Return the selected folder path
+    console.log('results in electron:' + result.filePaths)
+    return result.filePaths;  // An array containing both file and folder paths
   });
 
   // On macOS, recreate a window if none exist
