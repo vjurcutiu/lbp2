@@ -13,27 +13,54 @@ import PropTypes from 'prop-types';
  * In an Electron (or similar) environment, you might replace this implementation
  * with one that uses native file dialogs to obtain an absolute folder path.
  */
-const FolderBrowseButton = ({ onFolderSelect, buttonText }) => {
+const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
   const fileInputRef = useRef(null);
 
   const handleClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
+    } else {
+      const error = new Error("File input element not found.");
+      console.error(error);
+      if (onError) onError(error);
     }
   };
 
-  const handleChange = (e) => {
-    const files = e.target.files;
-    if (files.length > 0) {
-      // In browsers using the "webkitdirectory" attribute,
-      // each file has a `webkitRelativePath` property like "FolderName/subfolder/file.txt".
-      // We can extract the top-level folder name from the first file.
+  const handleChange = async (e) => {
+    try {
+      const files = e.target.files;
+      if (!files || files.length === 0) {
+        throw new Error("No files selected.");
+      }
       const firstFile = files[0];
-      const relativePath = firstFile.webkitRelativePath || '';
-      const folderName = relativePath.split('/')[0]; // This is our best guess of the folder name
+      if (!firstFile) {
+        throw new Error("No file data available.");
+      }
 
-      // Pass the folder name (or an array of files, if needed) to the callback.
-      onFolderSelect(folderName);
+      let folderPath;
+      if (window.electronAPI) {
+        // In Electron, use the native dialog to get the full folder path.
+        folderPath = await window.electronAPI.selectFolder();
+      } else {
+        // In a browser, we can only use the relative path.
+        const relativePath = firstFile.webkitRelativePath || '';
+        if (!relativePath) {
+          throw new Error("Could not determine folder from file path.");
+        }
+        // Extract the first segment as the folder name.
+        folderPath = relativePath.split('/')[0];
+      }
+
+      if (!folderPath) {
+        throw new Error("Folder name is empty.");
+      }
+
+      onFolderSelect(folderPath);
+    } catch (error) {
+      console.error("Error in FolderBrowseButton handleChange:", error);
+      if (onError) {
+        onError(error);
+      }
     }
   };
 
@@ -42,7 +69,7 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText }) => {
       <button onClick={handleClick}>
         {buttonText || 'Browse'}
       </button>
-      {/* The input is hidden and has the attribute "webkitdirectory" to enable folder selection */}
+      {/* The input is hidden and uses the "webkitdirectory" attribute for folder selection */}
       <input
         ref={fileInputRef}
         type="file"
@@ -57,10 +84,12 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText }) => {
 FolderBrowseButton.propTypes = {
   onFolderSelect: PropTypes.func.isRequired,
   buttonText: PropTypes.string,
+  onError: PropTypes.func, // Optional error callback
 };
 
 FolderBrowseButton.defaultProps = {
   buttonText: 'Browse',
+  onError: null,
 };
 
 export default FolderBrowseButton;

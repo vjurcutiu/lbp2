@@ -59,3 +59,29 @@ def process_folder():
         results["vector_upsert"] = {"error": f"Error upserting files to vector database: {str(e)}"}
 
     return jsonify(results), 200
+
+@file_bp.route('/test_process_folder', methods=['POST'])
+def test_process_folder():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "JSON payload required."}), 400
+    print(data)
+
+    folder_path = data.get("folder_path")
+    extension = data.get("extension")
+    conversation_id = data.get("conversation_id")  # Optional
+
+    if not folder_path or not extension:
+        return jsonify({"error": "Both 'folder_path' and 'extension' are required."}), 400
+
+    results = {}
+
+    try:
+        # Step 1: Scan the folder and add files to the database.
+        scan_results = scan_and_add_files(folder_path, extension, conversation_id)
+        print(scan_results)
+
+    except Exception as e:
+        results["scan"] = {"error": f"Error scanning folder: {str(e)}"}
+
+    return scan_results

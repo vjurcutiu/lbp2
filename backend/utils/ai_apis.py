@@ -3,7 +3,7 @@ import requests
 from openai import OpenAI
 
 
-def openai_api_logic(text, additional_params=None):
+def openai_api_logic(text, additional_params=None, purpose = 'chat'):
     """
     Generic OpenAI API logic that can generate metadata, embeddings, or chat messages,
     based on the provided endpoint or parameters.
@@ -25,22 +25,22 @@ def openai_api_logic(text, additional_params=None):
     if additional_params:
         payload.update(additional_params)
     
-    
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant. The context represents the previous messages sent by the user in the conversation. Try to infer what the general direction of the conversation is based on those messages. The prompt is the current question. Answer the current question only, unless the user brings up previous information in the conversation."},
-            {
-                "role": "user",
-                "content": f"{payload['context']}this is where the context ends. This is where the prompt starts:{payload['prompt']}"
-            }
-        ]
-    )
-    
-    return completion.choices[0].message
+    if purpose == 'chat':
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. The context represents the previous messages sent by the user in the conversation. Try to infer what the general direction of the conversation is based on those messages. The prompt is the current question. Answer the current question only, unless the user brings up previous information in the conversation."},
+                {
+                    "role": "user",
+                    "content": f"{payload['context']}this is where the context ends. This is where the prompt starts:{payload['prompt']}"
+                }
+            ]
+        )
+        
+        return completion.choices[0].message
 
 
-def send_to_api(text, api_logic_func, additional_params=None):
+def send_to_api(text, api_logic_func, additional_params=None, purpose = 'chat'):
     """
     Interface layer that sends file_text to a chosen API using the provided api_logic_func.
     
@@ -53,7 +53,7 @@ def send_to_api(text, api_logic_func, additional_params=None):
         dict: The response from the API.
     """
     try:
-        result = api_logic_func(text, additional_params)
+        result = api_logic_func(text, additional_params, purpose)
         return result
     except Exception as e:
         # Log the error as needed.
