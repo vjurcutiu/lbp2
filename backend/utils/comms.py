@@ -61,9 +61,15 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     # Prepare additional parameters for the chat response that includes the updated summary.
     # Here, we add a "context" field to additional_params to supply the conversation summary to the AI API.
     chat_params = additional_params.copy() if additional_params else {}
+
+    # Add messages as context to the payload
+    messages_context= {
+        'context' : get_all_messages_for_conversation(conversation_id, 'user')
+        }
+    
     
     # Step 4: Process the chat message via the AI API, using the updated context.
-    ai_api_response = send_to_api(frontend_message, openai_api_logic, chat_params)
+    ai_api_response = send_to_api(frontend_message, openai_api_logic, messages_context)
     
     # Extract the AI reply text. (Adjust the key as per your API response structure.)
     ai_reply_text = ai_api_response if ai_api_response else "No response"
@@ -81,7 +87,7 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
         "conversation_id": conversation_id,
         "user_message": frontend_message,
         "ai_response": ai_message.message,
-        "context": updated_summary
+        "context": messages_context
     }
 
 def summarize_conversation(conversation_id, new_message, additional_params=None):
@@ -169,12 +175,19 @@ def model_to_dict(instance):
         result[column.name] = value
     return result
 
-def get_all_messages_for_conversation(conversation_id):
+def get_all_messages_for_conversation(conversation_id, sender=None):
     """
     Retrieve all messages for a given conversation ID.
     
+    If a sender is provided, only messages from that sender will be retrieved.
+    Otherwise, all messages for the conversation are returned.
+    
     :param conversation_id: The ID of the conversation.
+    :param sender: (Optional) The sender whose messages to filter by.
     :return: A list of dictionaries representing the messages.
     """
-    messages = ConversationMessage.query.filter_by(conversation_id=conversation_id).all()
+    query = ConversationMessage.query.filter_by(conversation_id=conversation_id)
+    if sender is not None:
+        query = query.filter_by(sender=sender)
+    messages = query.all()
     return [model_to_dict(message) for message in messages]
