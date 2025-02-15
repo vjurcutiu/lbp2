@@ -39,6 +39,42 @@ def openai_api_logic(text, additional_params=None, purpose = 'chat'):
         
         return completion.choices[0].message
 
+    if purpose == 'keywords':
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Generate keywords in Romanian for this legal document. The keywords will be used for a search engine. If the document is empty, or has just a few words in it, the keyword should be 'broken'."},
+                {
+                    "role": "user",
+                    "content": f"{payload['prompt']}"
+                }
+            ]
+        )
+        
+        return completion.choices[0].message
+    
+    if purpose == 'summary':
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Summarize this document in romanian."},
+                {
+                    "role": "user",
+                    "content": f"{payload['prompt']}"
+                }
+            ]
+        )
+        
+        return completion.choices[0].message
+    
+    if purpose == 'embeddings':
+        response = client.embeddings.create(
+            input=payload,
+            model="text-embedding-3-small"
+        )
+
+        print(response.data[0].embedding)
+        return response.data[0].embedding
 
 def send_to_api(text, api_logic_func, additional_params=None, purpose = 'chat'):
     """

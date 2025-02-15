@@ -168,7 +168,7 @@ def get_all_conversation_ids():
 def model_to_dict(instance):
     result = {}
     for column in instance.__table__.columns:
-        value = getattr(instance, column.name)
+        value = getattr(instance, column.name, None)
         if isinstance(value, datetime.datetime):
             # Convert the datetime object into a Pendulum object and then format it.
             value = pendulum.instance(value).to_iso8601_string()

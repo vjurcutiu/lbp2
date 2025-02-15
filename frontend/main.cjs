@@ -26,14 +26,14 @@ app.whenReady().then(() => {
   createWindow();
 
   // Register the handler for the 'select-folder' channel
-  ipcMain.handle('select-folder-or-file', async () => {
+  ipcMain.handle('select-files', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openFile', 'openDirectory', 'multiSelections']
+      properties: ['openFile', 'multiSelections']
     });
     if (result.canceled) {
       return null;
     }
-    console.log('results in electron:' + result.filePaths)
+    console.log('results in electron:' +result.filePaths)
     return result.filePaths;  // An array containing both file and folder paths
   });
 

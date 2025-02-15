@@ -1,51 +1,33 @@
-// src/components/FileProcessing.jsx
-import React, { useState } from 'react';
+// src/components/FolderProcessor.jsx
+import React from 'react';
 import FolderBrowseButton from './common/FolderBrowseButton';
-import NotificationModal from './common/NotificationModal';
-import { processFolder } from '../services/api'; // Your API function for the Flask route
+import { processFolder } from '../services'; // Adjust the import path if needed
 
-const FileProcessing = () => {
-  const [selectedFolder, setSelectedFolder] = useState('');
-  const [notification, setNotification] = useState({
-    visible: false,
-    message: '',
-  });
-
-  const handleFolderSelect = (folderName) => {
-    setSelectedFolder(folderName);
-    // Call the API to process the folder.
-    processFolder({ folder_path: folderName, extension: '.txt' })
-      .then((res) => {
-        // Customize your success message as needed.
-        setNotification({
-          visible: true,
-          message: `Files imported successfully from "${folderName}".`,
-        });
-      })
-      .catch((err) => {
-        setNotification({
-          visible: true,
-          message: `File import failed for "${folderName}": ${err.message}`,
-        });
-      });
-  };
-
-  const closeNotification = () => {
-    setNotification({ visible: false, message: '' });
+const FolderProcessor = () => {
+  // This function will be passed as the onFolderSelect callback.
+  // It receives the selected file/folder paths from FolderBrowseButton.
+  const handleFolderSelect = async (selectedPaths) => {
+    try {
+      // Call your API function with the file data.
+      const response = await processFolder(selectedPaths);
+      console.log('Folder processed successfully:', response);
+      // You can now update state, show a notification, etc.
+    } catch (error) {
+      console.error('Error processing folder:', error);
+      // Optionally, show an error message to the user.
+    }
   };
 
   return (
     <div>
-      <h2>File Processing</h2>
-      <FolderBrowseButton onFolderSelect={handleFolderSelect} buttonText="Select Folder" />
-      {selectedFolder && <p>Selected Folder: {selectedFolder}</p>}
-      <NotificationModal
-        message={notification.message}
-        visible={notification.visible}
-        onClose={closeNotification}
+      <h1>Process Folder</h1>
+      <FolderBrowseButton 
+        onFolderSelect={handleFolderSelect} 
+        buttonText="Select Folder" 
+        onError={(error) => console.error('Selection error:', error)}
       />
     </div>
   );
 };
 
-export default FileProcessing;
+export default FolderProcessor;

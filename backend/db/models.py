@@ -1,5 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.dialects.postgresql import JSONB
+
 
 db = SQLAlchemy()
 
@@ -47,13 +50,14 @@ class File(db.Model):
     file_path = db.Column(db.String(255), nullable=False)
     file_extension = db.Column(db.String(20), nullable=False)
     # Optional JSON field to store extra file metadata.
-    meta_data = db.Column(db.JSON, nullable=True)
+    meta_data = db.Column(MutableDict.as_mutable(db.JSON), default=dict, nullable=True)
     # Optionally associate this file with a conversation.
     conversation_id = db.Column(
         db.Integer, db.ForeignKey("conversation.id"), nullable=True
     )
     # Field to confirm whether the file has been uploaded.
     is_uploaded = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime) 
 
     def __repr__(self):
         return f"<File {self.id} at {self.created_at}>"

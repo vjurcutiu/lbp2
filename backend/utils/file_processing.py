@@ -2,60 +2,62 @@ import os
 from db.models import db, File
 from utils.ai_apis import send_to_api, openai_api_logic  # You can swap out openai_api_logic with another API function as needed
 from utils.vector_apis import send_to_vector_db, pinecone_vector_logic
+from sqlalchemy import or_
+from flask import current_app
 
 
-def scan_and_add_files(folder_path, extension, conversation_id=None):
-    """
-    Scans the given folder for files with the specified extension and adds them to the database.
-    
-    Args:
-        folder_path (str): The directory to scan for files.
-        extension (str): The file extension to filter by (e.g., '.txt').
-        conversation_id (int, optional): If provided, associates each file with a conversation.
-        
-    Returns:
-        dict: A summary containing two keys:
-            - 'added': list of file paths that were added to the database.
-            - 'skipped': list of file paths that were skipped (already exist in the database).
-    """
+def scan_and_add_files(path, extension, conversation_id=None):
     added_files = []
     skipped_files = []
-    
-    # Walk the directory tree (including subdirectories)
-    for root, dirs, files in os.walk(folder_path):
-        for filename in files:
-            # Check if the file has the specified extension (case-insensitive)
-            if filename.lower().endswith(extension.lower()):
-                full_path = os.path.join(root, filename)
-                
-                # Check if the file already exists in the database
-                existing_file = File.query.filter_by(file_path=full_path).first()
-                if existing_file:
-                    skipped_files.append(full_path)
-                    continue
-                
-                # Extract the file extension from the filename
-                _, file_ext = os.path.splitext(filename)
 
-                # Create a new File record.
-                # Here, is_uploaded is set to True because the file exists on disk.
+    if os.path.isfile(path):
+        # Process a single file
+        if path.lower().endswith(extension.lower()):
+            full_path = os.path.abspath(path)
+            existing_file = File.query.filter_by(file_path=full_path).first()
+            if existing_file:
+                skipped_files.append(full_path)
+            else:
+                _, file_ext = os.path.splitext(full_path)
                 new_file = File(
                     file_path=full_path,
                     file_extension=file_ext,
                     conversation_id=conversation_id,
                     is_uploaded=False,
-                    metadata=None  # You could add logic to generate metadata if needed.
+                    metadata=None
                 )
                 db.session.add(new_file)
                 added_files.append(full_path)
-    
-    # Commit the session to save the new records
+    elif os.path.isdir(path):
+        # Process all files in the directory
+        for root, dirs, files in os.walk(path):
+            for filename in files:
+                if filename.lower().endswith(extension.lower()):
+                    full_path = os.path.join(root, filename)
+                    existing_file = File.query.filter_by(file_path=full_path).first()
+                    if existing_file:
+                        skipped_files.append(full_path)
+                        continue
+
+                    _, file_ext = os.path.splitext(filename)
+                    new_file = File(
+                        file_path=full_path,
+                        file_extension=file_ext,
+                        conversation_id=conversation_id,
+                        is_uploaded=False,
+                        metadata=None
+                    )
+                    db.session.add(new_file)
+                    added_files.append(full_path)
+    else:
+        raise Exception("Invalid path provided.")
+
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         raise Exception(f"Database error: {e}")
-    
+
     return {
         'added': added_files,
         'skipped': skipped_files
@@ -134,7 +136,9 @@ def get_files_without_metadata_text():
             - 'contents': The text extracted from the file.
     """
     # Query for files that have no metadata.
-    files_without_metadata = File.query.filter(File.meta_data.is_(None)).all()
+    files_without_metadata = File.query.filter(
+        or_(File.meta_data.is_(None), File.meta_data == {})
+        ).all()
     
     results = []
     for file_entry in files_without_metadata:
@@ -151,43 +155,65 @@ def get_files_without_metadata_text():
     
     return results
 
-def process_files_for_metadata():
+def process_files_for_metadata(type='keywords'):
     """
     Retrieves files from the database that need metadata generation,
     extracts text from them, and sends them to an API for metadata generation.
     
+    For each file, if its meta_data does not have a key equal to the passed `type`
+    value (or if meta_data is None), it processes the file and stores the API response 
+    under that key.
+    
     Returns:
         list[dict]: A list of results from the API for each processed file.
     """
-    # Query for files that need metadata generation (e.g., metadata field is None)
-    files_to_process = File.query.filter(File.meta_data.is_(None)).all()
-    
+    # Use the 'type' parameter as the metadata key.
+    meta_key = type  # You can also map values if needed.
+    current_app.logger.info(f"meta_key: {meta_key}")
+
+    try:
+        # Retrieve all files from the database.
+        all_files = File.query.all()
+        current_app.logger.info(f"Total files retrieved: {len(all_files)}")
+        
+        # Filter in Python for files where meta_data is None or does not contain meta_key.
+        files_to_process = [
+            file_entry for file_entry in all_files
+            if (file_entry.meta_data is None) or 
+               (isinstance(file_entry.meta_data, dict) and meta_key not in file_entry.meta_data)
+        ]
+        current_app.logger.info(f"Files to process: {files_to_process}")
+    except Exception as e:
+        current_app.logger.error("Error during query: %s", e)
+        raise
+
     results = []
     for file_entry in files_to_process:
-        if os.path.exists(file_entry.file_path):          
+        if os.path.exists(file_entry.file_path):
             file_text = extract_text_from_file(file_entry.file_path)
-            
             if file_text:
-                # Send file_text to the API using the interface layer
-                api_response = send_to_api(file_text, openai_api_logic)
-                
+                # Send file_text to the API using the interface layer, using type as the purpose.
+                api_response = send_to_api(file_text, openai_api_logic, purpose=type)
                 if api_response is not None:
-                    # Update the file metadata in the database based on the API response.
-                    file_entry.meta_data = api_response
+                    # Ensure meta_data is initialized as a dict before updating.
+                    if file_entry.meta_data is None:
+                        file_entry.meta_data = {}
+                    
+                    # Update the file metadata with the API response.
+                    file_entry.meta_data[meta_key] = api_response.content
                     results.append({
                         "file_path": file_entry.file_path,
-                        "api_response": api_response
+                        "meta_data": api_response.content
                     })
         else:
-            print(f"File not found: {file_entry.file_path}")
-    
+            current_app.logger.warning(f"File not found: {file_entry.file_path}")
+
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Error updating database: {e}")
-    
-    return results
+        current_app.logger.error(f"Error updating database: {e}")
+
 
 def upsert_files_to_vector_db():
     """
@@ -207,30 +233,21 @@ def upsert_files_to_vector_db():
         if os.path.exists(file_entry.file_path):
             # Here you can choose to use metadata or re-extract text for embeddings.
             # For this example, we use file metadata as the source text.
-            file_text = file_entry.meta_data.get("summary", "") if isinstance(file_entry.meta_data, dict) else ""
+            file_text = get_files_without_metadata_text()
             
             if file_text:
-                # Set additional parameters, including an endpoint for embeddings generation.
-                additional_params = {
-                    "endpoint": "https://api.openai.com/v1/embeddings",  # Example endpoint for embeddings
-                    "max_tokens": 100  # Example parameter; adjust as needed.
-                }
                 
                 # Generate embeddings using the AI API.
-                api_response = send_to_api(file_text, openai_api_logic, additional_params)
+                api_response = send_to_api(file_text, openai_api_logic, purpose='embeddings')
                 
                 if api_response is not None:
                     # Extract embeddings from the API response.
                     # The structure of api_response depends on your AI API.
-                    embeddings = api_response.get("data") or api_response.get("embeddings")
+                    embeddings = api_response
                     
-                    if embeddings:
-                        # Set the vector database endpoint and additional parameters if needed.
-                        vector_endpoint = "https://your-vector-db.com/upsert"  # Example endpoint
-                        vector_additional_params = {"namespace": "your_namespace"}
-                        
+                    if embeddings:                        
                         # Upsert the embeddings to the vector database.
-                        vector_response = send_to_vector_db(embeddings, vector_endpoint, pinecone_vector_logic, vector_additional_params)
+                        vector_response = send_to_vector_db(embeddings, pinecone_vector_logic)
                         
                         if vector_response is not None:
                             # Mark file as uploaded to avoid reprocessing.

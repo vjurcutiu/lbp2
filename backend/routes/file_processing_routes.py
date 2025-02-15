@@ -65,7 +65,6 @@ def test_process_folder():
     data = request.get_json()
     if not data:
         return jsonify({"error": "JSON payload required."}), 400
-    print(data)
 
     folder_path = data.get("folder_path")
     extension = data.get("extension")
@@ -79,9 +78,25 @@ def test_process_folder():
     try:
         # Step 1: Scan the folder and add files to the database.
         scan_results = scan_and_add_files(folder_path, extension, conversation_id)
-        print(scan_results)
-
+        results["scan"] = scan_results
     except Exception as e:
         results["scan"] = {"error": f"Error scanning folder: {str(e)}"}
 
-    return scan_results
+    try:
+        # Step 2: Process files to generate metadata.
+        keywords = process_files_for_metadata(type='keywords')
+        results["keywords"] = keywords
+        summary = process_files_for_metadata(type='summary')
+        results["summary"] = summary
+        print(results)
+    except Exception as e:
+        results["metadata_generation"] = {"error": f"Error generating metadata: {str(e)}"}
+    
+    try:
+        # Step 3: Upsert files (with metadata) to the vector database.
+        vector_results = upsert_files_to_vector_db()
+        results["vector_upsert"] = vector_results
+    except Exception as e:
+        results["vector_upsert"] = {"error": f"Error upserting files to vector database: {str(e)}"}
+
+    return jsonify(results), 200

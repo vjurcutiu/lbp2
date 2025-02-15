@@ -1,5 +1,10 @@
 # vector_apis.py
 import requests
+from pinecone.grpc import PineconeGRPC as Pinecone
+from pinecone import ServerlessSpec
+import time
+
+from db.models import File, db
 
 def pinecone_vector_logic(embeddings, endpoint, additional_params=None):
     """
@@ -13,16 +18,9 @@ def pinecone_vector_logic(embeddings, endpoint, additional_params=None):
     Returns:
         dict: The response from the vector database.
     """
-    payload = {
-        "embeddings": embeddings
-    }
-    if additional_params:
-        payload.update(additional_params)
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer YOUR_PINECONE_API_KEY"
-    }
+    pc = Pinecone(api_key="YOUR_API_KEY")    
+        
+    payload = embeddings
     
     response = requests.post(endpoint, headers=headers, json=payload)
     response.raise_for_status()
