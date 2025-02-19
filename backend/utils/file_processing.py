@@ -233,7 +233,7 @@ def upsert_files_to_vector_db():
         if os.path.exists(file_entry.file_path):
             # Here you can choose to use metadata or re-extract text for embeddings.
             # For this example, we use file metadata as the source text.
-            file_text = get_files_without_metadata_text()
+            file_text = extract_text_from_file(file_entry)
             
             if file_text:
                 
@@ -247,7 +247,7 @@ def upsert_files_to_vector_db():
                     
                     if embeddings:                        
                         # Upsert the embeddings to the vector database.
-                        vector_response = send_to_vector_db(embeddings, pinecone_vector_logic)
+                        vector_response = send_to_vector_db(embeddings, pinecone_vector_logic,filetext=file_text)
                         
                         if vector_response is not None:
                             # Mark file as uploaded to avoid reprocessing.

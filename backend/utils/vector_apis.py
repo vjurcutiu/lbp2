@@ -6,7 +6,7 @@ import time
 
 from db.models import File, db
 
-def pinecone_vector_logic(embeddings, endpoint, additional_params=None):
+def pinecone_vector_logic(embeddings, additional_params=None, filetext=''):
     """
     Example logic for upserting embeddings to a Pinecone-like vector database.
     
@@ -22,11 +22,11 @@ def pinecone_vector_logic(embeddings, endpoint, additional_params=None):
         
     payload = embeddings
     
-    response = requests.post(endpoint, headers=headers, json=payload)
+    response = requests.post(json=payload)
     response.raise_for_status()
     return response.json()
 
-def send_to_vector_db(embeddings, endpoint, vector_logic_func, additional_params=None):
+def send_to_vector_db(embeddings, endpoint, vector_logic_func, additional_params=None, filetext=''):
     """
     Interface layer for sending embeddings to a vector database.
     

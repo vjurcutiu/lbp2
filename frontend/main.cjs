@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 
 let mainWindow; // Declare a global variable for the window
@@ -11,9 +11,11 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,  // For security
       contextIsolation: true,  // Use a preload script for communication
-      preload: path.join(__dirname, 'preload.js')  // Preload script path
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  //Menu.setApplicationMenu(null);
 
   // Load the React build's index.html file.
   mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));

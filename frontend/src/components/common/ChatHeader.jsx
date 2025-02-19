@@ -5,15 +5,17 @@ import PropTypes from 'prop-types';
 const ChatHeader = ({ title, onBack, style, className }) => {
   return (
     <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px 15px',
-        backgroundColor: '#007bff',
-        color: '#fff',
-        ...style,
-      }}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 15px',
+      backgroundColor: '#f2f2f2',
+      width: '100%',
+      boxShadow: '0 2px 1px rgba(0, 0, 0, 0.1)',
+      marginBottom: '1px',  
+      ...style,
+    }}
       className={className}
     >
       {onBack && (

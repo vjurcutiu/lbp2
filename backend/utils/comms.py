@@ -62,9 +62,11 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     # Here, we add a "context" field to additional_params to supply the conversation summary to the AI API.
     chat_params = additional_params.copy() if additional_params else {}
 
+    #TODO: Search vector DB
+
     # Add messages as context to the payload
     messages_context= {
-        'context' : get_all_messages_for_conversation(conversation_id, 'user')
+        'context' : get_all_messages_for_conversation(conversation_id, 'user') 
         }
     
     
@@ -191,3 +193,6 @@ def get_all_messages_for_conversation(conversation_id, sender=None):
         query = query.filter_by(sender=sender)
     messages = query.all()
     return [model_to_dict(message) for message in messages]
+
+def get_metadata(files):
+    return

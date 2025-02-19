@@ -25,6 +25,7 @@ export const getConversationMessages = async (conversationId) => {
       // Format the created_at date to a human-readable format, e.g., "3:45 PM"
       created_at: dayjs(msg.created_at).format('h:mm A')
     }));
+    console.log(messages)
     return messages;
   } catch (error) {
     console.error("Error fetching conversation messages:", error);

@@ -1,3 +1,25 @@
+/**
+ * ChatLayout Component
+ *
+ * This component serves as the main layout for the chat application.
+ * It orchestrates the conversation sidebar and the chat container to provide
+ * a complete chat interface.
+ *
+ * Functionality:
+ * - Fetches and displays a list of conversation IDs in the ConversationSidebar.
+ * - Allows the user to select an active conversation, which triggers fetching of
+ *   the corresponding messages.
+ * - Integrates the ChatContainer to display the conversation's messages and handle
+ *   message sending.
+ * - Supports folder import functionality to process chat files via the onFolderImport handler.
+ *
+ * The component leverages useEffect hooks to manage data fetching on mount and when
+ * the active conversation changes.
+ *
+ * Layout:
+ * - The sidebar fills 20% of the screen width.
+ * - The chat area fills the remaining 80% of the screen width.
+ */
 // src/components/ChatLayout.jsx
 import React, { useState, useEffect } from 'react';
 import ConversationSidebar from './common/ConversationSidebar';
@@ -59,12 +81,14 @@ const ChatLayout = () => {
 
   return (
     <div style={layoutStyles.container}>
-      <ConversationSidebar
-        conversations={conversations}
-        onSelect={handleSelectConversation}
-        activeConversationId={activeConversationId}
-        onFolderImport={handleFolderImport}
-      />
+      <div style={layoutStyles.sidebar}>
+        <ConversationSidebar
+          conversations={conversations}
+          onSelect={handleSelectConversation}
+          activeConversationId={activeConversationId}
+          onFolderImport={handleFolderImport}
+        />
+      </div>
       <div style={layoutStyles.chatArea}>
         <ChatContainer 
           conversationId={activeConversationId} 
@@ -79,13 +103,21 @@ const ChatLayout = () => {
 const layoutStyles = {
   container: {
     display: 'flex',
-    height: '100vh',
+    height: '100%',
     width: '100%',
   },
+  sidebar: {
+    flex: '0 1 250px', // base width 250px; allow it to shrink if needed
+    backgroundColor: '#f8f8f8',
+    height: '100%',
+    overflowY: 'auto',
+  },
   chatArea: {
-    flex: 1,
+    flex: 1, // fill the rest of the space
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
+    overflowY: 'auto',
   },
 };
 

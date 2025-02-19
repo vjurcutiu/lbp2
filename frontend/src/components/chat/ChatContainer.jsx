@@ -1,5 +1,24 @@
+/**
+ * ChatContainer Component
+ *
+ * This component serves as the main container for the chat interface.
+ * It integrates the ChatHeader, ChatWindow, and ChatInput subcomponents to
+ * display the chat header, conversation messages, and input field respectively.
+ *
+ * The component manages local state for the user input and handles sending
+ * messages. Upon sending a message, it:
+ *   - Creates a user message with a timestamp.
+ *   - Updates the conversation state with the new message.
+ *   - Calls an API to process the message and receive an AI response.
+ *   - Updates the conversation state with the AI's reply or an error message if the API call fails.
+ *
+ * Props:
+ *   - conversationId: Identifier for the current chat conversation.
+ *   - messages: An array of current chat messages.
+ *   - updateMessages: A function to update the conversation messages.
+ */
 // src/components/chat/ChatContainer.jsx
-import {React, useState} from 'react';
+import { React, useState } from 'react';
 import ChatHeader from '../common/ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from '../common/ChatInput';
@@ -47,7 +66,7 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   };
 
   return (
-    <div>
+    <div style={styles.container}>
       <ChatHeader title="Chat App" />
       <ChatWindow messages={messages} />
       <ChatInput         
@@ -56,6 +75,26 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
         onSend={handleSend} />
     </div>
   );
+};
+
+const styles = {
+  container: {
+    width: '100%', // Fill parent's width
+    height: '100%', // Fill parent's height
+    display: 'flex',
+    flexDirection: 'column', // Arrange children vertically
+    backgroundColor: '#f8f8f8'
+  },
+  header: {
+    flex: '0 0 15%', // 10% height
+  },
+  chatWindow: {
+    flex: '0 0 65%', // 80% height
+    overflowY: 'auto', // Enable scrolling if content exceeds available height
+  },
+  input: {
+    flex: '0 0 20%', // 10% height
+  },
 };
 
 export default ChatContainer;
