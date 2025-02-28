@@ -4,7 +4,7 @@ from utils.ai_apis import send_to_api, openai_api_logic  # You can swap out open
 from utils.vector_apis import send_to_vector_db, pinecone_vector_logic
 from sqlalchemy import or_
 from flask import current_app
-
+import logging
 
 def scan_and_add_files(path, extension, conversation_id=None):
     added_files = []
@@ -227,13 +227,14 @@ def upsert_files_to_vector_db():
     """
     # Query for files that have metadata and have not been uploaded to the vector database.
     files_to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
+    print('files to upsert:' + str(files_to_upsert))
     
     results = []
     for file_entry in files_to_upsert:
         if os.path.exists(file_entry.file_path):
             # Here you can choose to use metadata or re-extract text for embeddings.
             # For this example, we use file metadata as the source text.
-            file_text = extract_text_from_file(file_entry)
+            file_text = extract_text_from_file(file_entry.file_path)
             
             if file_text:
                 
@@ -245,17 +246,21 @@ def upsert_files_to_vector_db():
                     # The structure of api_response depends on your AI API.
                     embeddings = api_response
                     
-                    if embeddings:                        
+                    if embeddings:                                            
                         # Upsert the embeddings to the vector database.
-                        vector_response = send_to_vector_db(embeddings, pinecone_vector_logic,filetext=file_text)
+                        vector_response = send_to_vector_db(embeddings, pinecone_vector_logic, filetext=file_text)
+
+                    
+                        
                         
                         if vector_response is not None:
                             # Mark file as uploaded to avoid reprocessing.
                             file_entry.is_uploaded = True
                             results.append({
                                 "file_path": file_entry.file_path,
-                                "vector_response": vector_response
+                                "vector_response": str(vector_response)
                             })
+                            print(results)
                         else:
                             print(f"Failed to upsert embeddings for {file_entry.file_path}")
                     else:

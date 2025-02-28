@@ -69,11 +69,10 @@ def openai_api_logic(text, additional_params=None, purpose = 'chat'):
     
     if purpose == 'embeddings':
         response = client.embeddings.create(
-            input=payload,
-            model="text-embedding-3-small"
+            model="text-embedding-ada-002",
+            input=payload['prompt'],            
         )
 
-        print(response.data[0].embedding)
         return response.data[0].embedding
 
 def send_to_api(text, api_logic_func, additional_params=None, purpose = 'chat'):
@@ -93,5 +92,5 @@ def send_to_api(text, api_logic_func, additional_params=None, purpose = 'chat'):
         return result
     except Exception as e:
         # Log the error as needed.
-        print(f"Error sending to API: {e}")
+        print(f"Error sending to AI API: {e}")
         return None

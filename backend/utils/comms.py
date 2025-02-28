@@ -3,6 +3,7 @@ from db.models import db, Conversation, ConversationMessage
 from utils.ai_apis import send_to_api, openai_api_logic
 import datetime
 import pendulum
+from utils.search import search
 
 def process_chat_message(frontend_message, conversation_id=None, additional_params=None):
     """
@@ -10,34 +11,20 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
       1. Ensuring the conversation exists.
       2. Storing the user's message.
       3. Auto-generating an updated conversation summary context.
-      4. Sending the user message along with the updated context to the AI API.
-      5. Storing the AI's response in the conversation.
-    
-    Args:
-        frontend_message (str): The message received from the frontend.
-        conversation_id (int, optional): The conversation to which this message belongs.
-                                         If not provided, a new conversation is created.
-        additional_params (dict, optional): Additional parameters for the AI API call.
-    
-    Returns:
-        dict: A dictionary containing:
-            - conversation_id: The conversation's ID.
-            - user_message: The user's message.
-            - ai_response: The AI's API response.
-            - context: The updated conversation summary used as context.
+      4. Searching the vector database to retrieve relevant documents.
+      5. Sending the user message along with the enriched context to the AI API.
+      6. Storing the AI's response in the conversation.
     """
     
     # Step 1: Ensure a valid conversation exists.
     if conversation_id:
         conversation = Conversation.query.get(conversation_id)
         if not conversation:
-            # If provided conversation_id doesn't exist, create a new conversation.
             conversation = Conversation()
             db.session.add(conversation)
             db.session.commit()
             conversation_id = conversation.id
     else:
-        # No conversation provided; create a new one.
         conversation = Conversation()
         db.session.add(conversation)
         db.session.commit()
@@ -54,29 +41,37 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     db.session.commit()
     
     # Step 3: Update the conversation summary context.
-    # This function appends the new message to any existing summary (if present) and returns an updated summary.
-    # You can pass extra parameters to control summarization behavior if needed.
     updated_summary = summarize_conversation(conversation_id, frontend_message, additional_params)
 
-    # Prepare additional parameters for the chat response that includes the updated summary.
-    # Here, we add a "context" field to additional_params to supply the conversation summary to the AI API.
-    chat_params = additional_params.copy() if additional_params else {}
-
-    #TODO: Search vector DB
-
-    # Add messages as context to the payload
-    messages_context= {
-        'context' : get_all_messages_for_conversation(conversation_id, 'user') 
-        }
+    # Prepare additional parameters for the chat response.
+    # Retrieve all previous user messages to form the conversation context.
+    conversation_context = get_all_messages_for_conversation(conversation_id, 'user')
     
+    # Step 4: Retrieve relevant documents from Pinecone via the search module.
+    # Use the user's message as the query. Adjust additional_params as needed.
+    search_results = search(frontend_message, additional_params={
+        "index_name": "default-index",
+        "namespace": "default-namespace",
+        "top_k": 3
+    })
     
-    # Step 4: Process the chat message via the AI API, using the updated context.
+    # Process the search results to extract the source text.
+    retrieved_docs = ""
+    for match in search_results.get("results", []):
+        # Append each document's text to the retrieved context.
+        retrieved_docs += match.get("text", "") + "\n"
+    
+    # Combine conversation context with retrieved documents.
+    combined_context = f"{conversation_context}\nRetrieved Documents:\n{retrieved_docs}"
+    messages_context = {"context": combined_context}
+    
+    # Step 5: Process the chat message via the AI API using the enriched context.
     ai_api_response = send_to_api(frontend_message, openai_api_logic, messages_context)
     
-    # Extract the AI reply text. (Adjust the key as per your API response structure.)
+    # Extract the AI reply text.
     ai_reply_text = ai_api_response if ai_api_response else "No response"
     
-    # Step 5: Store the AI's response in the conversation.
+    # Step 6: Store the AI's response in the conversation.
     ai_message = ConversationMessage(
         conversation_id=conversation_id,
         sender='ai',
