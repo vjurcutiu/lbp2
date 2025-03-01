@@ -8,17 +8,24 @@
  * The component manages local state for the user input and handles sending
  * messages.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatHeader from '../common/ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from '../common/ChatInput';
 import { sendChatMessage } from '../../services';
 import ChatPlaceholder from './ChatPlaceholder';
 
-
 const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   const [input, setInput] = useState('');
   const [showChatWindow, setShowChatWindow] = useState(false);
+
+  // When conversationId becomes null/undefined (i.e. new conversation),
+  // reset the view to show the ChatPlaceholder.
+  useEffect(() => {
+    if (!conversationId) {
+      setShowChatWindow(false);
+    }
+  }, [conversationId]);
 
   const handleSend = async (inputText) => {
     // If the chat window isn't visible yet, show it once a message is sent.
@@ -66,7 +73,7 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   return (
     <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-800">
       <ChatHeader title="Chat App" />
-      {/* Conditionally render an initial view or the ChatWindow */}
+      {/* Conditionally render ChatWindow or ChatPlaceholder */}
       {showChatWindow ? (
         <ChatWindow messages={messages} />
       ) : (

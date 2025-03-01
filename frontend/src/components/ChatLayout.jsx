@@ -3,11 +3,11 @@ import ConversationSidebar from './common/sidebar/ConversationSidebar';
 import ChatContainer from './chat/ChatContainer';
 import { getConversations, getConversationMessages, processFolder, deleteConversation, renameConversation } from '../services';
 
-
 const ChatLayout = () => {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [conversationMessages, setConversationMessages] = useState([]);
+  const [isNewConversation, setIsNewConversation] = useState(false);
 
   // Fetch conversation objects on mount.
   useEffect(() => {
@@ -42,6 +42,15 @@ const ChatLayout = () => {
 
   const handleSelectConversation = (conversationId) => {
     setActiveConversationId(conversationId);
+    setIsNewConversation(false); // clear new conversation flag if user selects an existing conversation
+  };
+
+  // Handler for new conversation button
+  const handleNewConversation = () => {
+    // Reset any active conversation and clear messages.
+    setActiveConversationId(null);
+    setConversationMessages([]);
+    setIsNewConversation(true);
   };
 
   const handleFolderImport = (folderName) => {
@@ -94,6 +103,7 @@ const ChatLayout = () => {
           onFolderImport={handleFolderImport}
           onRenameConversation={handleRenameConversation}
           onDeleteConversation={handleDeleteConversation}
+          onNewConversation={handleNewConversation}  
         />
       </div>
       <div className="flex-1 h-full flex flex-col overflow-y-auto">
@@ -101,6 +111,7 @@ const ChatLayout = () => {
           conversationId={activeConversationId} 
           messages={conversationMessages}
           updateMessages={setConversationMessages}
+          isNewConversation={isNewConversation}  
         />
       </div>
     </div>

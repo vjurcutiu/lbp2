@@ -1,4 +1,3 @@
-// In ConversationSidebar.jsx
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import FolderBrowseButton from './FolderBrowseButton';
@@ -10,6 +9,7 @@ const ConversationSidebar = ({
   onFolderImport,
   onRenameConversation,
   onDeleteConversation,
+  onNewConversation, // new prop
 }) => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,6 +46,13 @@ const ConversationSidebar = ({
     <div className="w-[250px] border-r border-gray-300 p-4 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full">
       <div className="mb-4">
         <h2 className="mb-2 text-lg font-semibold">Conversations</h2>
+        {/* New Conversation Button */}
+        <button
+          className="w-full mb-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+          onClick={onNewConversation}
+        >
+          New Conversation
+        </button>
         <FolderBrowseButton onFolderSelect={onFolderImport} buttonText="Import Files" />
       </div>
       <ul className="list-none p-0 m-0">
@@ -121,12 +128,14 @@ ConversationSidebar.propTypes = {
   onFolderImport: PropTypes.func.isRequired,
   onRenameConversation: PropTypes.func,
   onDeleteConversation: PropTypes.func,
+  onNewConversation: PropTypes.func, // new prop type
 };
 
 ConversationSidebar.defaultProps = {
   activeConversationId: null,
   onRenameConversation: null,
   onDeleteConversation: null,
+  onNewConversation: () => {}, // provide a default no-op
 };
 
 export default ConversationSidebar;
