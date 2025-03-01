@@ -1,4 +1,4 @@
-// src/components/common/ConversationSidebar.jsx
+// In ConversationSidebar.jsx
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import FolderBrowseButton from './FolderBrowseButton';
@@ -13,22 +13,24 @@ const ConversationSidebar = ({
 }) => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
 
   const openContextMenu = (conversation, event) => {
-    // Prevent the parent click event from triggering onSelect
     event.stopPropagation();
     setSelectedConversation(conversation);
+    setNewTitle(conversation.title || '');
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedConversation(null);
+    setNewTitle('');
   };
 
   const handleRename = () => {
     if (onRenameConversation && selectedConversation) {
-      onRenameConversation(selectedConversation);
+      onRenameConversation(selectedConversation, newTitle);
     }
     closeModal();
   };
@@ -60,7 +62,6 @@ const ConversationSidebar = ({
               className="ml-2 text-gray-500 hover:text-gray-700"
               onClick={(e) => openContextMenu(conv, e)}
             >
-              {/* Small icon (three dots) */}
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v.01M12 12v.01M12 18v.01" />
               </svg>
@@ -73,6 +74,16 @@ const ConversationSidebar = ({
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white p-4 rounded shadow-lg">
             <h3 className="text-lg font-medium mb-4">Options</h3>
+            <div className="mb-4">
+              <label htmlFor="newTitle" className="block mb-1">New Title</label>
+              <input
+                id="newTitle"
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="w-full border rounded px-2 py-1"
+              />
+            </div>
             <button
               className="block w-full text-left py-2 hover:bg-gray-100"
               onClick={handleRename}
@@ -108,8 +119,8 @@ ConversationSidebar.propTypes = {
   onSelect: PropTypes.func.isRequired,
   activeConversationId: PropTypes.number,
   onFolderImport: PropTypes.func.isRequired,
-  onRenameConversation: PropTypes.func, // callback for rename action
-  onDeleteConversation: PropTypes.func, // callback for delete action
+  onRenameConversation: PropTypes.func,
+  onDeleteConversation: PropTypes.func,
 };
 
 ConversationSidebar.defaultProps = {

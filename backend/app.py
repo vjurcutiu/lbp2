@@ -5,6 +5,7 @@ from routes.chat_routes import chat_bp
 from routes.file_processing_routes import file_bp
 from routes.extra_routes import extra_bp
 
+
 from flask_migrate import Migrate
 from flask_cors import CORS  # Import CORS
 
@@ -20,6 +21,7 @@ CORS(app)  # Enable CORS for all routes
 app.register_blueprint(chat_bp, url_prefix='/conversation')
 app.register_blueprint(file_bp, url_prefix='/files')
 app.register_blueprint(extra_bp, url_prefix='/extra')
+
 
 if __name__ == '__main__':
     app.run(debug=True)

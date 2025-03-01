@@ -191,3 +191,35 @@ def get_all_messages_for_conversation(conversation_id, sender=None):
 
 def get_metadata(files):
     return
+
+def delete_conversation(conversation_id):
+    """
+    Deletes a conversation and all its associated messages and files.
+    Uses cascade deletion as defined in the Conversation model.
+    """
+    conversation = Conversation.query.get(conversation_id)
+    if not conversation:
+        return {"error": "Conversation not found."}
+    db.session.delete(conversation)
+    try:
+        db.session.commit()
+        return {"message": f"Conversation {conversation_id} deleted successfully."}
+    except Exception as e:
+        db.session.rollback()
+        return {"error": f"Error deleting conversation: {e}"}
+
+
+def rename_conversation(conversation_id, new_title):
+    """
+    Renames a conversation by updating its title.
+    """
+    conversation = Conversation.query.get(conversation_id)
+    if not conversation:
+        return {"error": "Conversation not found."}
+    conversation.title = new_title
+    try:
+        db.session.commit()
+        return {"message": f"Conversation {conversation_id} renamed successfully."}
+    except Exception as e:
+        db.session.rollback()
+        return {"error": f"Error renaming conversation: {e}"}

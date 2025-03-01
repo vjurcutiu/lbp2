@@ -1,6 +1,6 @@
 # chat_routes.py
 from flask import Blueprint, request, jsonify, current_app
-from utils.comms import process_chat_message, get_all_conversation_ids, get_all_messages_for_conversation
+from utils.comms import process_chat_message, get_all_conversation_ids, get_all_messages_for_conversation, delete_conversation, rename_conversation
 
 # Create a blueprint for chat routes.
 chat_bp = Blueprint('chat', __name__)
@@ -69,3 +69,59 @@ def get_conversation_messages(conversation_id):
     except Exception as e:
         current_app.logger.error("Error fetching messages for conversation %s: %s", conversation_id, e, exc_info=True)
         return jsonify({"error": "Failed to retrieve messages for conversation."}), 500
+    
+@chat_bp.route('/delete', methods=['POST'])
+def delete_conversation_route():
+    """
+    Endpoint to delete a conversation along with its associated messages and files.
+    
+    Expected JSON payload:
+      {
+          "conversation_id": <conversation id>
+      }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request, JSON required."}), 400
+
+    conversation_id = data.get("conversation_id")
+    if not conversation_id:
+        return jsonify({"error": "Conversation ID is required."}), 400
+
+    try:
+        result = delete_conversation(conversation_id)
+        # Return 200 if deletion was successful, else 400.
+        status_code = 200 if "message" in result else 400
+        return jsonify(result), status_code
+    except Exception as e:
+        current_app.logger.error("Error deleting conversation", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@chat_bp.route('/rename', methods=['POST'])
+def rename_conversation_route():
+    """
+    Endpoint to rename a conversation.
+    
+    Expected JSON payload:
+      {
+          "conversation_id": <conversation id>,
+          "new_title": "New Conversation Title"
+      }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request, JSON required."}), 400
+
+    conversation_id = data.get("conversation_id")
+    new_title = data.get("new_title")
+    if not conversation_id or not new_title:
+        return jsonify({"error": "Both conversation_id and new_title are required."}), 400
+
+    try:
+        result = rename_conversation(conversation_id, new_title)
+        status_code = 200 if "message" in result else 400
+        return jsonify(result), status_code
+    except Exception as e:
+        current_app.logger.error("Error renaming conversation", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500

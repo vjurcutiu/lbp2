@@ -23,7 +23,7 @@
 import React, { useState, useEffect } from 'react';
 import ConversationSidebar from './common/sidebar/ConversationSidebar';
 import ChatContainer from './chat/ChatContainer';
-import { getConversationIds, getConversationMessages, processFolder } from '../services';
+import { getConversationIds, getConversationMessages, processFolder, deleteConversation, renameConversation } from '../services';
 
 const ChatLayout = () => {
   const [conversations, setConversations] = useState([]);
@@ -39,10 +39,6 @@ const ChatLayout = () => {
         // Map IDs to conversation objects with default titles.
         const convs = ids.map(id => ({ id, title: `Conversation ${id}` }));
         setConversations(convs);
-        // Instead of auto-selecting an existing conversation, start fresh.
-        // if (convs.length > 0) {
-        //   setActiveConversationId(convs[0].id);
-        // }
       } catch (error) {
         console.error("Error fetching conversation ids:", error);
       }
@@ -64,7 +60,6 @@ const ChatLayout = () => {
       };
       fetchMessages();
     } else {
-      // When there's no active conversation, ensure we have an empty conversation
       setConversationMessages([]);
     }
   }, [activeConversationId]);
@@ -83,6 +78,39 @@ const ChatLayout = () => {
       .catch((err) => console.error('Error processing folder:', err));
   };
 
+  // Handler for renaming a conversation.
+  const handleRenameConversation = async (conversation, newTitle) => {
+    try {
+      const result = await renameConversation(conversation.id, newTitle);
+      console.log(result);
+      setConversations((prevConvs) =>
+        prevConvs.map((conv) =>
+          conv.id === conversation.id ? { ...conv, title: newTitle } : conv
+        )
+      );
+    } catch (error) {
+      console.error('Error renaming conversation:', error);
+    }
+  };
+
+  // Handler for deleting a conversation.
+  const handleDeleteConversation = async (conversation) => {
+    if (!window.confirm('Are you sure you want to delete this conversation?')) return;
+    try {
+      const result = await deleteConversation(conversation.id);
+      console.log(result);
+      // Remove the deleted conversation from local state.
+      setConversations((prevConvs) => prevConvs.filter((conv) => conv.id !== conversation.id));
+      // If the deleted conversation was active, clear the active conversation and messages.
+      if (activeConversationId === conversation.id) {
+        setActiveConversationId(null);
+        setConversationMessages([]);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
   return (
     <div className="flex h-full w-full">
       <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
@@ -91,6 +119,8 @@ const ChatLayout = () => {
           onSelect={handleSelectConversation}
           activeConversationId={activeConversationId}
           onFolderImport={handleFolderImport}
+          onRenameConversation={handleRenameConversation}
+          onDeleteConversation={handleDeleteConversation}
         />
       </div>
       <div className="flex-1 h-full flex flex-col overflow-y-auto">
