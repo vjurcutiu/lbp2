@@ -1,6 +1,8 @@
 # chat_routes.py
 from flask import Blueprint, request, jsonify, current_app
 from utils.comms import process_chat_message, get_all_conversation_ids, get_all_messages_for_conversation, delete_conversation, rename_conversation
+from db.models import Conversation
+from utils.comms import model_to_dict
 
 # Create a blueprint for chat routes.
 chat_bp = Blueprint('chat', __name__)
@@ -125,3 +127,18 @@ def rename_conversation_route():
     except Exception as e:
         current_app.logger.error("Error renaming conversation", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+    
+@chat_bp.route('/list', methods=['GET'])
+def list_conversations():
+    """
+    Endpoint to retrieve all conversations with their metadata.
+    Returns a JSON object like:
+      { "conversations": [ { id, title, meta_data, created_at, ... }, ... ] }
+    """
+    try:
+        conversations = Conversation.query.all()
+        conv_list = [model_to_dict(conv) for conv in conversations]
+        return jsonify({"conversations": conv_list}), 200
+    except Exception as e:
+        current_app.logger.error("Error fetching conversations", exc_info=True)
+        return jsonify({"error": "Failed to fetch conversations"}), 500

@@ -1,46 +1,22 @@
-/**
- * ChatLayout Component
- *
- * This component serves as the main layout for the chat application.
- * It orchestrates the conversation sidebar and the chat container to provide
- * a complete chat interface.
- *
- * Functionality:
- * - Fetches and displays a list of conversation IDs in the ConversationSidebar.
- * - Allows the user to select an active conversation, which triggers fetching of
- *   the corresponding messages.
- * - Integrates the ChatContainer to display the conversation's messages and handle
- *   message sending.
- * - Supports folder import functionality to process chat files via the onFolderImport handler.
- *
- * The component leverages useEffect hooks to manage data fetching on mount and when
- * the active conversation changes.
- *
- * Layout:
- * - The sidebar has a base width of 250px.
- * - The chat area fills the remaining space.
- */
 import React, { useState, useEffect } from 'react';
 import ConversationSidebar from './common/sidebar/ConversationSidebar';
 import ChatContainer from './chat/ChatContainer';
-import { getConversationIds, getConversationMessages, processFolder, deleteConversation, renameConversation } from '../services';
+import { getConversations, getConversationMessages, processFolder, deleteConversation, renameConversation } from '../services';
+
 
 const ChatLayout = () => {
   const [conversations, setConversations] = useState([]);
-  // Start with no active conversation
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [conversationMessages, setConversationMessages] = useState([]);
 
-  // Fetch conversation IDs on mount.
+  // Fetch conversation objects on mount.
   useEffect(() => {
     const fetchConversations = async () => {
       try {
-        const ids = await getConversationIds();
-        // Map IDs to conversation objects with default titles.
-        const convs = ids.map(id => ({ id, title: `Conversation ${id}` }));
+        const convs = await getConversations();
         setConversations(convs);
       } catch (error) {
-        console.error("Error fetching conversation ids:", error);
+        console.error("Error fetching conversations:", error);
       }
     };
     fetchConversations();
@@ -66,14 +42,13 @@ const ChatLayout = () => {
 
   const handleSelectConversation = (conversationId) => {
     setActiveConversationId(conversationId);
-    // The useEffect hook above will fetch messages for the new conversation.
   };
 
   const handleFolderImport = (folderName) => {
     processFolder({ folder_path: folderName, extension: '.txt' })
       .then((res) => {
         console.log('Folder processed:', res);
-        // Optionally, update your conversation list if needed.
+        // Optionally update conversation list.
       })
       .catch((err) => console.error('Error processing folder:', err));
   };
@@ -99,9 +74,7 @@ const ChatLayout = () => {
     try {
       const result = await deleteConversation(conversation.id);
       console.log(result);
-      // Remove the deleted conversation from local state.
       setConversations((prevConvs) => prevConvs.filter((conv) => conv.id !== conversation.id));
-      // If the deleted conversation was active, clear the active conversation and messages.
       if (activeConversationId === conversation.id) {
         setActiveConversationId(null);
         setConversationMessages([]);
@@ -127,7 +100,7 @@ const ChatLayout = () => {
         <ChatContainer 
           conversationId={activeConversationId} 
           messages={conversationMessages}
-          updateMessages={setConversationMessages}  // Pass the parent's state updater
+          updateMessages={setConversationMessages}
         />
       </div>
     </div>
