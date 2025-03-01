@@ -13,26 +13,21 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center',
-      width: '100%',
-      padding: '5px',
-      backgroundColor: '#f2f2f2',
-      }}>
+    <div className="flex items-center w-full p-1 bg-gray-200 dark:bg-gray-700">
       <Input
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         onKeyPress={handleKeyPress}
-        style={{ flex: 1, marginRight: '8px' }}
+        className="flex-1 mr-2"
       />
       <Button 
         onClick={() => onSend(value)}
-        style={{
-          backgroundColor: '#f2f2f2',
-          }}
-        >Send</Button>
+        className="bg-gray-200 dark:bg-gray-700"
+        disabled={disabled}
+      >
+        Send
+      </Button>
     </div>
   );
 };

@@ -17,10 +17,9 @@
  * the active conversation changes.
  *
  * Layout:
- * - The sidebar fills 20% of the screen width.
- * - The chat area fills the remaining 80% of the screen width.
+ * - The sidebar has a base width of 250px.
+ * - The chat area fills the remaining space.
  */
-// src/components/ChatLayout.jsx
 import React, { useState, useEffect } from 'react';
 import ConversationSidebar from './common/ConversationSidebar';
 import ChatContainer from './chat/ChatContainer';
@@ -80,8 +79,8 @@ const ChatLayout = () => {
   };
 
   return (
-    <div style={layoutStyles.container}>
-      <div style={layoutStyles.sidebar}>
+    <div className="flex h-full w-full">
+      <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
         <ConversationSidebar
           conversations={conversations}
           onSelect={handleSelectConversation}
@@ -89,7 +88,7 @@ const ChatLayout = () => {
           onFolderImport={handleFolderImport}
         />
       </div>
-      <div style={layoutStyles.chatArea}>
+      <div className="flex-1 h-full flex flex-col overflow-y-auto">
         <ChatContainer 
           conversationId={activeConversationId} 
           messages={conversationMessages}
@@ -98,27 +97,6 @@ const ChatLayout = () => {
       </div>
     </div>
   );
-};
-
-const layoutStyles = {
-  container: {
-    display: 'flex',
-    height: '100%',
-    width: '100%',
-  },
-  sidebar: {
-    flex: '0 1 250px', // base width 250px; allow it to shrink if needed
-    backgroundColor: '#f8f8f8',
-    height: '100%',
-    overflowY: 'auto',
-  },
-  chatArea: {
-    flex: 1, // fill the rest of the space
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    overflowY: 'auto',
-  },
 };
 
 export default ChatLayout;

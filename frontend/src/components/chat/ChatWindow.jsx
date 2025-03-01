@@ -2,14 +2,8 @@
  * ChatWindow Component
  *
  * This component is responsible for displaying the conversation messages
- * in a scrollable window. It maps through the provided messages array and renders
- * each message with styling based on the sender type (user or AI). Each message
- * includes the message text rendered as markdown and a timestamp indicating when it was created.
- *
- * The component also leverages PropTypes to enforce the structure of the message
- * objects passed in via the "messages" prop.
+ * in a scrollable window.
  */
-
 import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import ReactMarkdown from 'react-markdown';
@@ -25,15 +19,22 @@ const ChatWindow = ({ messages }) => {
   }, [messages]);
 
   return (
-    <div ref={containerRef} style={styles.container}>
+    <div 
+      ref={containerRef} 
+      className="p-2.5 overflow-y-auto h-full w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
+    >
       {messages.map((msg, idx) => (
         <div 
-          key={msg.id || `${msg.conversation_id}-${msg.created_at}-${idx}`} 
-          style={msg.sender === 'user' ? styles.userMessage : styles.aiMessage}>
-          <div style={styles.messageText}>
+          key={msg.id || `${msg.conversation_id}-${msg.created_at}-${idx}`}
+          className={msg.sender === 'user' 
+            ? "self-end max-w-[60%] bg-blue-600 text-white px-3 py-2 rounded-xl mb-2.5" 
+            : "self-start max-w-[60%] bg-gray-300 dark:bg-gray-600 text-black dark:text-white px-3 py-2 rounded-xl mb-2.5"
+          }
+        >
+          <div className="m-0">
             <ReactMarkdown>{msg.message}</ReactMarkdown>
           </div>
-          <small style={styles.timestamp}>
+          <small className="text-xs opacity-60">
             {msg.created_at && !isNaN(new Date(msg.created_at).getTime())
               ? new Date(msg.created_at).toLocaleTimeString()
               : msg.created_at || 'No timestamp'}
@@ -44,51 +45,10 @@ const ChatWindow = ({ messages }) => {
   );
 };
 
-const styles = {
-  container: {
-    padding: '10px',
-    overflowY: 'auto',
-    height: '100%', // adjust height as needed
-    width: '100%',
-    backgroundColor: '#f2f2f2',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  userMessage: {
-    textAlign: 'left',
-    backgroundColor: '#007bff',
-    color: '#fff',
-    padding: '8px 12px',
-    borderRadius: '12px',
-    marginBottom: '10px',
-    maxWidth: '60%',
-    alignSelf: 'flex-end',
-    wordWrap: 'break-word',
-  },
-  aiMessage: {
-    textAlign: 'left',
-    backgroundColor: '#e0e0e0',
-    color: '#000',
-    padding: '8px 12px',
-    borderRadius: '12px',
-    marginBottom: '10px',
-    maxWidth: '60%',
-    alignSelf: 'flex-start',
-    wordWrap: 'break-word',
-  },
-  messageText: {
-    margin: 0,
-  },
-  timestamp: {
-    fontSize: '10px',
-    opacity: 0.6,
-  },
-};
-
 ChatWindow.propTypes = {
   messages: PropTypes.arrayOf(
     PropTypes.shape({
-      id: PropTypes.number.isRequired,
+      id: PropTypes.number,
       conversation_id: PropTypes.number.isRequired,
       sender: PropTypes.string.isRequired,
       message: PropTypes.string.isRequired,

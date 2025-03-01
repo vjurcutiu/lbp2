@@ -1,24 +1,23 @@
 // src/components/common/ConversationSidebar.jsx
 import React from 'react';
 import PropTypes from 'prop-types';
-import FolderBrowseButton from './FolderBrowseButton'; // Import the folder browse button
+import FolderBrowseButton from './FolderBrowseButton';
 
 const ConversationSidebar = ({ conversations, onSelect, activeConversationId, onFolderImport }) => {
   return (
-    <div style={styles.sidebar}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>Conversations</h2>
-        {/* Add the Folder Browse Button here */}
+    <div className="w-[250px] border-r border-gray-300 p-4 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full">
+      <div className="mb-4">
+        <h2 className="mb-2 text-lg font-semibold">Conversations</h2>
         <FolderBrowseButton onFolderSelect={onFolderImport} buttonText="Import Files" />
       </div>
-      <ul style={styles.list}>
+      <ul className="list-none p-0 m-0">
         {conversations.map((conv) => (
           <li
             key={conv.id}
-            style={{
-              ...styles.listItem,
-              backgroundColor: conv.id === activeConversationId ? '#e0e0e0' : 'transparent',
-            }}
+            className={`p-2 mb-1 cursor-pointer rounded 
+              ${conv.id === activeConversationId 
+                ? 'bg-gray-200 dark:bg-gray-700' 
+                : 'bg-transparent'}`}
             onClick={() => onSelect(conv.id)}
           >
             {conv.title || `Conversation ${conv.id}`}
@@ -27,35 +26,6 @@ const ConversationSidebar = ({ conversations, onSelect, activeConversationId, on
       </ul>
     </div>
   );
-};
-
-const styles = {
-  sidebar: {
-    width: '250px',
-    borderRight: '1px solid #ccc',
-    padding: '15px',
-    backgroundColor: '#f9f9f9',
-    overflowY: 'auto',
-    height: '100%',
-  },
-  header: {
-    marginBottom: '15px',
-  },
-  title: {
-    margin: '0 0 10px 0',
-    fontSize: '18px',
-  },
-  list: {
-    listStyleType: 'none',
-    padding: 0,
-    margin: 0,
-  },
-  listItem: {
-    padding: '10px',
-    marginBottom: '5px',
-    cursor: 'pointer',
-    borderRadius: '4px',
-  },
 };
 
 ConversationSidebar.propTypes = {
@@ -67,7 +37,7 @@ ConversationSidebar.propTypes = {
   ).isRequired,
   onSelect: PropTypes.func.isRequired,
   activeConversationId: PropTypes.number,
-  onFolderImport: PropTypes.func.isRequired, // Callback for folder import
+  onFolderImport: PropTypes.func.isRequired,
 };
 
 ConversationSidebar.defaultProps = {

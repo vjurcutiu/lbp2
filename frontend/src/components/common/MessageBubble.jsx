@@ -5,40 +5,28 @@ import ReactMarkdown from 'react-markdown';
 
 const MessageBubble = ({ sender, text, timestamp, style, className }) => {
   const isUser = sender === 'user';
+
   return (
     <div
-      className={className}
-      style={{
-        display: 'flex',
-        flexDirection: isUser ? 'row-reverse' : 'row',
-        alignItems: 'flex-end',
-        marginBottom: '10px',
-        ...style,
-      }}
+      className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'} items-end mb-2 ${className}`}
+      style={style}
     >
-      {/* Optionally include an avatar */}
-      <div style={{ margin: '0 8px' }}>
-        {/* Placeholder for avatar */}
+      <div className="mx-2">
         <img
           src={isUser ? '/path/to/user-avatar.png' : '/path/to/ai-avatar.png'}
           alt={`${sender} avatar`}
-          style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+          className="w-8 h-8 rounded-full"
         />
       </div>
       <div
-        style={{
-          maxWidth: '70%',
-          padding: '8px 12px',
-          borderRadius: '10px',
-          backgroundColor: isUser ? '#007bff' : '#f1f0f0',
-          color: isUser ? '#fff' : '#000',
-        }}
+        className={`max-w-[70%] px-3 py-2 rounded-xl 
+          ${isUser ? 'bg-blue-600 text-white' : 'bg-gray-200 text-black dark:bg-gray-700 dark:text-white'}`}
       >
-        <div style={{ margin: 0 }}>
+        <div>
           <ReactMarkdown>{text}</ReactMarkdown>
         </div>
         {timestamp && (
-          <small style={{ fontSize: '10px', opacity: 0.7 }}>
+          <small className="text-xs opacity-70">
             {timestamp}
           </small>
         )}
