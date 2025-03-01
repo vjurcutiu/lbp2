@@ -3,6 +3,9 @@
 @tailwind components;
 @tailwind utilities;
 @custom-variant dark (&:where(.dark, .dark *));
+@plugin 'tailwind-scrollbar';
+
+
 
 *, *::before, *::after {
   box-sizing: border-box;

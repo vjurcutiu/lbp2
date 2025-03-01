@@ -9,7 +9,7 @@ const ChatLayout = () => {
   const [conversationMessages, setConversationMessages] = useState([]);
   const [isNewConversation, setIsNewConversation] = useState(false);
 
-  // Fetch conversation objects on mount.
+  // Fetch conversations on mount.
   useEffect(() => {
     const fetchConversations = async () => {
       try {
@@ -42,12 +42,11 @@ const ChatLayout = () => {
 
   const handleSelectConversation = (conversationId) => {
     setActiveConversationId(conversationId);
-    setIsNewConversation(false); // clear new conversation flag if user selects an existing conversation
+    setIsNewConversation(false);
   };
 
   // Handler for new conversation button
   const handleNewConversation = () => {
-    // Reset any active conversation and clear messages.
     setActiveConversationId(null);
     setConversationMessages([]);
     setIsNewConversation(true);
@@ -57,12 +56,10 @@ const ChatLayout = () => {
     processFolder({ folder_path: folderName, extension: '.txt' })
       .then((res) => {
         console.log('Folder processed:', res);
-        // Optionally update conversation list.
       })
       .catch((err) => console.error('Error processing folder:', err));
   };
 
-  // Handler for renaming a conversation.
   const handleRenameConversation = async (conversation, newTitle) => {
     try {
       const result = await renameConversation(conversation.id, newTitle);
@@ -77,7 +74,6 @@ const ChatLayout = () => {
     }
   };
 
-  // Handler for deleting a conversation.
   const handleDeleteConversation = async (conversation) => {
     if (!window.confirm('Are you sure you want to delete this conversation?')) return;
     try {
@@ -93,6 +89,16 @@ const ChatLayout = () => {
     }
   };
 
+  // New function to refresh conversation list.
+  const refreshConversations = async () => {
+    try {
+      const convs = await getConversations();
+      setConversations(convs);
+    } catch (error) {
+      console.error("Error refreshing conversations:", error);
+    }
+  };
+
   return (
     <div className="flex h-full w-full">
       <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
@@ -103,7 +109,7 @@ const ChatLayout = () => {
           onFolderImport={handleFolderImport}
           onRenameConversation={handleRenameConversation}
           onDeleteConversation={handleDeleteConversation}
-          onNewConversation={handleNewConversation}  
+          onNewConversation={handleNewConversation}
         />
       </div>
       <div className="flex-1 h-full flex flex-col overflow-y-auto">
@@ -111,7 +117,8 @@ const ChatLayout = () => {
           conversationId={activeConversationId} 
           messages={conversationMessages}
           updateMessages={setConversationMessages}
-          isNewConversation={isNewConversation}  
+          isNewConversation={isNewConversation}
+          onNewMessage={refreshConversations}  
         />
       </div>
     </div>

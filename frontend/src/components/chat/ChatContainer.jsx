@@ -15,12 +15,10 @@ import ChatInput from '../common/ChatInput';
 import { sendChatMessage } from '../../services';
 import ChatPlaceholder from './ChatPlaceholder';
 
-const ChatContainer = ({ conversationId, messages, updateMessages }) => {
+const ChatContainer = ({ conversationId, messages, updateMessages, onNewMessage }) => {
   const [input, setInput] = useState('');
   const [showChatWindow, setShowChatWindow] = useState(false);
 
-  // When conversationId becomes null/undefined (i.e. new conversation),
-  // reset the view to show the ChatPlaceholder.
   useEffect(() => {
     if (!conversationId) {
       setShowChatWindow(false);
@@ -28,29 +26,24 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   }, [conversationId]);
 
   const handleSend = async (inputText) => {
-    // If the chat window isn't visible yet, show it once a message is sent.
     if (!showChatWindow) {
       setShowChatWindow(true);
     }
     
     console.log("Raw inputText received:", inputText);
 
-    // Create a user message with a timestamp.
     const userMessage = { 
       sender: 'user', 
       message: inputText,
       created_at: new Date().toISOString()
     };
 
-    // Update parent's messages.
     updateMessages(prevMessages => [...prevMessages, userMessage]);
     setInput('');
 
     try {
-      // Call the API to send the message, including the conversation ID.
       const response = await sendChatMessage({ message: inputText, conversation_id: conversationId });
       console.log("API response:", response);
-      // Map the API response to our message format.
       const aiReply = { 
         sender: 'ai', 
         message: response.ai_response || 'No response',
@@ -73,11 +66,11 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   return (
     <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-800">
       <ChatHeader title="Chat App" />
-      {/* Conditionally render ChatWindow or ChatPlaceholder */}
       {showChatWindow ? (
         <ChatWindow messages={messages} />
       ) : (
-        <ChatPlaceholder messages={messages} />
+        // Pass the onNewMessage prop to ChatPlaceholder
+        <ChatPlaceholder messages={messages} onNewMessage={onNewMessage} />
       )}
       <ChatInput         
         value={input}
@@ -89,3 +82,5 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
 };
 
 export default ChatContainer;
+
+

@@ -2,15 +2,18 @@ import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import ReactMarkdown from 'react-markdown';
 
-const ChatPlaceholder = ({ messages }) => {
+const ChatPlaceholder = ({ messages, onNewMessage }) => {
   const containerRef = useRef(null);
 
-  // Scroll to bottom every time messages update
+  // Scroll to bottom and trigger conversation refresh when messages update.
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages]);
+    if (onNewMessage) {
+      onNewMessage();
+    }
+  }, [messages, onNewMessage]);
 
   return (
     <div 
@@ -56,6 +59,7 @@ ChatPlaceholder.propTypes = {
       meta_data: PropTypes.any,
     })
   ).isRequired,
+  onNewMessage: PropTypes.func, // Called when messages update.
 };
 
 export default ChatPlaceholder;
