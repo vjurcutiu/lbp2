@@ -21,7 +21,7 @@
  * - The chat area fills the remaining space.
  */
 import React, { useState, useEffect } from 'react';
-import ConversationSidebar from './common/ConversationSidebar';
+import ConversationSidebar from './common/sidebar/ConversationSidebar';
 import ChatContainer from './chat/ChatContainer';
 import { getConversationIds, getConversationMessages, processFolder } from '../services';
 
