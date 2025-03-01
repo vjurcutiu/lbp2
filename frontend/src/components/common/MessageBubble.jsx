@@ -1,6 +1,7 @@
 // src/components/common/MessageBubble.jsx
 import React from 'react';
 import PropTypes from 'prop-types';
+import ReactMarkdown from 'react-markdown';
 
 const MessageBubble = ({ sender, text, timestamp, style, className }) => {
   const isUser = sender === 'user';
@@ -33,7 +34,9 @@ const MessageBubble = ({ sender, text, timestamp, style, className }) => {
           color: isUser ? '#fff' : '#000',
         }}
       >
-        <p style={{ margin: 0 }}>{text}</p>
+        <div style={{ margin: 0 }}>
+          <ReactMarkdown>{text}</ReactMarkdown>
+        </div>
         {timestamp && (
           <small style={{ fontSize: '10px', opacity: 0.7 }}>
             {timestamp}

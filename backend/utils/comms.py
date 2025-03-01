@@ -50,7 +50,7 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     # Step 4: Retrieve relevant documents from Pinecone via the search module.
     # Use the user's message as the query. Adjust additional_params as needed.
     search_results = search(frontend_message, additional_params={
-        "index_name": "default-index",
+        "index_name": "test",
         "namespace": "default-namespace",
         "top_k": 3
     })

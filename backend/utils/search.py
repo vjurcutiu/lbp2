@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from pinecone.grpc import PineconeGRPC as Pinecone
+from utils.ai_apis import send_to_api, openai_api_logic
 
 # Load environment variables from .env file
 load_dotenv()
@@ -36,24 +37,21 @@ def search(chat_message, additional_params=None):
     pc = Pinecone(api_key=api_key)
     
     # Embed the chat message using the query embedding (using the same model as for upsert).
-    query_embedding = pc.inference.embed(
-        model="multilingual-e5-large",
-        inputs=[chat_message],
-        parameters={"input_type": "query"}
-    )
-    
+    query_embedding = send_to_api(chat_message, openai_api_logic, purpose='embeddings')
+
     # Get a handle for the desired index.
     index = pc.Index(index_name)
     
     # Query the index using the generated embedding.
     results = index.query(
         namespace=namespace,
-        vector=query_embedding[0].values,
+        vector=query_embedding,
         top_k=top_k,
         include_metadata=True,
         include_values=False  # values not needed for this example
     )
-    
+    print(results)
+
     # Process results: each match should include metadata fields for keywords, summary, and text.
     processed_results = []
     for match in results.get("matches", []):
