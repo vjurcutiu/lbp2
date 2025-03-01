@@ -13,11 +13,19 @@ import ChatHeader from '../common/ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from '../common/ChatInput';
 import { sendChatMessage } from '../../services';
+import ChatPlaceholder from './ChatPlaceholder';
+
 
 const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   const [input, setInput] = useState('');
+  const [showChatWindow, setShowChatWindow] = useState(false);
 
-  const handleSend = async (inputText) => {    
+  const handleSend = async (inputText) => {
+    // If the chat window isn't visible yet, show it once a message is sent.
+    if (!showChatWindow) {
+      setShowChatWindow(true);
+    }
+    
     console.log("Raw inputText received:", inputText);
 
     // Create a user message with a timestamp.
@@ -58,7 +66,12 @@ const ChatContainer = ({ conversationId, messages, updateMessages }) => {
   return (
     <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-800">
       <ChatHeader title="Chat App" />
-      <ChatWindow messages={messages} />
+      {/* Conditionally render an initial view or the ChatWindow */}
+      {showChatWindow ? (
+        <ChatWindow messages={messages} />
+      ) : (
+        <ChatPlaceholder messages={messages} />
+      )}
       <ChatInput         
         value={input}
         onChange={(e) => setInput(e.target.value)}

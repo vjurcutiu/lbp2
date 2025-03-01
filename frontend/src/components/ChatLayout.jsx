@@ -27,6 +27,7 @@ import { getConversationIds, getConversationMessages, processFolder } from '../s
 
 const ChatLayout = () => {
   const [conversations, setConversations] = useState([]);
+  // Start with no active conversation
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [conversationMessages, setConversationMessages] = useState([]);
 
@@ -38,9 +39,10 @@ const ChatLayout = () => {
         // Map IDs to conversation objects with default titles.
         const convs = ids.map(id => ({ id, title: `Conversation ${id}` }));
         setConversations(convs);
-        if (convs.length > 0) {
-          setActiveConversationId(convs[0].id);
-        }
+        // Instead of auto-selecting an existing conversation, start fresh.
+        // if (convs.length > 0) {
+        //   setActiveConversationId(convs[0].id);
+        // }
       } catch (error) {
         console.error("Error fetching conversation ids:", error);
       }
@@ -61,6 +63,9 @@ const ChatLayout = () => {
         }
       };
       fetchMessages();
+    } else {
+      // When there's no active conversation, ensure we have an empty conversation
+      setConversationMessages([]);
     }
   }, [activeConversationId]);
 
