@@ -1,5 +1,5 @@
-// DarkModeToggle.jsx
 import React, { useEffect, useState } from 'react';
+import { FaSun, FaMoon } from "react-icons/fa6";
 
 const DarkModeToggle = () => {
   const [isDark, setIsDark] = useState(false);
@@ -24,9 +24,13 @@ const DarkModeToggle = () => {
   return (
     <button
       onClick={toggleDarkMode}
-      className="p-2 rounded focus:outline-none focus:ring bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+      className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 focus:outline-none transition-colors duration-300"
     >
-      {isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+      {isDark ? (
+        <FaMoon className="text-gray-800 dark:text-gray-200" size={20} />
+      ) : (
+        <FaSun className="text-yellow-500" size={20} />
+      )}
     </button>
   );
 };

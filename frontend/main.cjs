@@ -11,6 +11,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,  // For security
       contextIsolation: true,  // Use a preload script for communication
+      resizable: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
