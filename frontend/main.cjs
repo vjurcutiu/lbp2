@@ -3,6 +3,7 @@ const path = require('path');
 
 let mainWindow; // Declare a global variable for the window
 
+
 function createWindow() {
   // Create the browser window.
   mainWindow = new BrowserWindow({

@@ -74,6 +74,20 @@ def openai_api_logic(text, additional_params=None, purpose = 'chat'):
         )
 
         return response.data[0].embedding
+    
+    if purpose == 'convo-name':
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Generate a conversation title based on this initial message. Please make it in Romanian."},
+                {
+                    "role": "user",
+                    "content": f"{payload['prompt']}"
+                }
+            ]
+        )
+    
+    return completion.choices[0].message
 
 def send_to_api(text, api_logic_func, additional_params=None, purpose = 'chat'):
     """

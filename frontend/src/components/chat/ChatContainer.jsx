@@ -13,7 +13,7 @@ import ChatHeader from '../common/ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from '../common/ChatInput';
 import { sendChatMessage } from '../../services';
-import ChatPlaceholder from './ChatPlaceholder';
+import NewChat from './NewChat';
 
 const ChatContainer = ({ conversationId, messages, updateMessages, onNewMessage }) => {
   const [input, setInput] = useState('');
@@ -66,11 +66,10 @@ const ChatContainer = ({ conversationId, messages, updateMessages, onNewMessage 
   return (
     <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-800">
       <ChatHeader title="Chat App" />
-      {showChatWindow ? (
+      {conversationId ? (
         <ChatWindow messages={messages} />
       ) : (
-        // Pass the onNewMessage prop to ChatPlaceholder
-        <ChatPlaceholder messages={messages} onNewMessage={onNewMessage} />
+        <NewChat messages={messages} onNewMessage={onNewMessage} />
       )}
       <ChatInput         
         value={input}

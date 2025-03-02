@@ -223,3 +223,4 @@ def rename_conversation(conversation_id, new_title):
     except Exception as e:
         db.session.rollback()
         return {"error": f"Error renaming conversation: {e}"}
+    

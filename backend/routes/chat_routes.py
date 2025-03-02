@@ -142,3 +142,4 @@ def list_conversations():
     except Exception as e:
         current_app.logger.error("Error fetching conversations", exc_info=True)
         return jsonify({"error": "Failed to fetch conversations"}), 500
+    
