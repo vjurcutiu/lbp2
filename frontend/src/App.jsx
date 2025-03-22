@@ -1,10 +1,10 @@
 // src/App.jsx
 import React from 'react';
-import ChatLayout from './components/ChatLayout';
+import AppLayout from './components/AppLayout';
 
 
 const App = () => {
-  return <ChatLayout />;
+  return <AppLayout />;
 };
 
 export default App;

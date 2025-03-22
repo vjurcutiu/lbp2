@@ -1,14 +1,15 @@
-// src/components/common/ChatInput.jsx
 import React from 'react';
 import PropTypes from 'prop-types';
-import Button from './Button';
-import Input from './Input';
+import Button from '../common/Button';
+import Input from '../common/Input';
 
 const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSend(value);
+      if (!disabled) {
+        onSend(value);
+      }
     }
   };
 
@@ -19,10 +20,11 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
         onChange={onChange}
         placeholder={placeholder}
         onKeyPress={handleKeyPress}
+        disabled={disabled}
         className="flex-1 mr-2"
       />
-      <Button 
-        onClick={() => onSend(value)}
+      <Button
+        onClick={() => !disabled && onSend(value)}
         className="bg-gray-200 dark:bg-gray-700"
         disabled={disabled}
       >

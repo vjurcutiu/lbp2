@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import ConversationSidebar from './common/sidebar/ConversationSidebar';
-import ChatContainer from './chat/ChatContainer';
+import ConversationSidebar from './sidebar/ConversationSidebar';
+import ChatMetaContainer from './chat/ChatMetaContainer';
 import { getConversations, getConversationMessages, processFolder, deleteConversation, renameConversation } from '../services';
 
 const ChatLayout = () => {
@@ -113,7 +113,7 @@ const ChatLayout = () => {
         />
       </div>
       <div className="flex-1 h-full flex flex-col overflow-y-auto">
-        <ChatContainer 
+        <ChatMetaContainer 
           conversationId={activeConversationId} 
           messages={conversationMessages}
           updateMessages={setConversationMessages}
