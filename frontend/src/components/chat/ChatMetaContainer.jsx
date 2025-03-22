@@ -11,52 +11,67 @@ const ChatContainer = ({ conversationId, messages, updateMessages, onNewMessage 
   const [isWaiting, setIsWaiting] = useState(false);
 
   useEffect(() => {
-    if (!conversationId) {
-      setShowChatWindow(false);
-    }
+    if (!conversationId) setShowChatWindow(false);
   }, [conversationId]);
 
   const handleSend = async (inputText) => {
-    if (isWaiting) return; // Prevent sending if waiting for a response
+    if (isWaiting) return;
 
-    if (!showChatWindow) {
-      setShowChatWindow(true);
-    }
-
-    console.log("Raw inputText received:", inputText);
+    if (!showChatWindow) setShowChatWindow(true);
 
     const userMessage = {
       sender: 'user',
       message: inputText,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
 
-    updateMessages(prevMessages => [...prevMessages, userMessage]);
+    updateMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsWaiting(true);
 
-    try {
-      const response = await sendChatMessage({ message: inputText, conversation_id: conversationId });
-      console.log("API response:", response);
-
-      const aiReply = {
+    updateMessages((prev) => [
+      ...prev,
+      {
         sender: 'ai',
-        message: response.ai_response || 'No response',
-        created_at: response.ai_response?.created_at || new Date().toISOString()
-      };
+        pending: true,
+        message: '',
+        created_at: new Date().toISOString(),
+      },
+    ]);
 
-      updateMessages(prevMessages => [...prevMessages, aiReply]);
-    } catch (error) {
-      console.error('Error sending chat message:', error);
+    try {
+      const response = await sendChatMessage({
+        message: inputText,
+        conversation_id: conversationId,
+      });
 
-      updateMessages(prevMessages => [
-        ...prevMessages,
-        {
-          sender: 'ai',
-          message: 'Error processing your message. Please try again.',
-          created_at: new Date().toISOString()
+      updateMessages((prev) => {
+        const newMessages = [...prev];
+        const pendingIndex = newMessages.findIndex((msg) => msg.pending);
+        if (pendingIndex !== -1) {
+          newMessages[pendingIndex] = {
+            sender: 'ai',
+            pending: false,
+            message: response.ai_response || 'No response',
+            created_at: response.ai_response?.created_at || new Date().toISOString(),
+          };
         }
-      ]);
+        return newMessages;
+      });
+    } catch (error) {
+      updateMessages((prev) => {
+        const newMessages = [...prev];
+        const pendingIndex = newMessages.findIndex((msg) => msg.pending);
+        if (pendingIndex !== -1) {
+          newMessages[pendingIndex] = {
+            sender: 'ai',
+            pending: false,
+            message: 'Error processing your message. Please try again.',
+            created_at: new Date().toISOString(),
+          };
+        }
+        return newMessages;
+      });
     } finally {
       setIsWaiting(false);
     }
