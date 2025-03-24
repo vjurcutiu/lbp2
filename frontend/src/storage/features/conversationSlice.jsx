@@ -6,7 +6,6 @@ import {
   deleteConversation,
 } from '../../services';
 
-// Async thunk to fetch conversations with a console log
 export const fetchConversations = createAsyncThunk(
   'conversations/fetchConversations',
   async () => {
@@ -17,7 +16,6 @@ export const fetchConversations = createAsyncThunk(
   }
 );
 
-// Async thunk to fetch messages for a conversation with a log
 export const fetchConversationMessages = createAsyncThunk(
   'conversations/fetchConversationMessages',
   async (conversationId) => {
@@ -39,19 +37,21 @@ const conversationsSlice = createSlice({
     error: null,
   },
   reducers: {
-    // Set active conversation
     selectConversation: (state, action) => {
       console.log('Selecting conversation:', action.payload);
       state.activeConversationId = action.payload;
       state.isNewConversation = false;
       state.conversationMessages = [];
     },
-    // Start new conversation
     newConversation: (state) => {
       console.log('Starting a new conversation');
       state.activeConversationId = null;
       state.conversationMessages = [];
       state.isNewConversation = true;
+    },
+    setConversationMessages: (state, action) => {
+      console.log('Updating conversation messages:', action.payload);
+      state.conversationMessages = action.payload;
     },
     renameConversationLocal: (state, action) => {
       const { conversationId, newTitle } = action.payload;
@@ -97,6 +97,7 @@ const conversationsSlice = createSlice({
 export const {
   selectConversation,
   newConversation,
+  setConversationMessages,
   renameConversationLocal,
   deleteConversationLocal,
 } = conversationsSlice.actions;

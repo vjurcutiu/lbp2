@@ -16,7 +16,6 @@ const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMess
 
   const handleSend = async (inputText) => {
     if (isWaiting) return;
-
     if (!showChatWindow) setShowChatWindow(true);
 
     const userMessage = {
@@ -25,6 +24,7 @@ const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMess
       created_at: new Date().toISOString(),
     };
 
+    console.log('Sending user message:', userMessage);
     updateMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsWaiting(true);
@@ -45,6 +45,12 @@ const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMess
         conversation_id: conversationId,
       });
 
+      console.log('Response from sendChatMessage:', response);
+
+      if (!conversationId && response.new_conversation_id) {
+        onNewMessage(response.new_conversation_id);
+      }
+
       updateMessages((prev) => {
         const newMessages = [...prev];
         const pendingIndex = newMessages.findIndex((msg) => msg.pending);
@@ -59,6 +65,7 @@ const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMess
         return newMessages;
       });
     } catch (error) {
+      console.error('Error sending message:', error);
       updateMessages((prev) => {
         const newMessages = [...prev];
         const pendingIndex = newMessages.findIndex((msg) => msg.pending);
