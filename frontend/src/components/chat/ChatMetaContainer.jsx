@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import ChatHeader from './ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from './ChatInput';
-import { sendChatMessage } from '../../services';
+import { sendChatMessage } from '../../services/';
 import NewChat from './NewChat';
 
-const ChatContainer = ({ conversationId, messages, updateMessages, onNewMessage }) => {
+const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMessage }) => {
   const [input, setInput] = useState('');
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -95,4 +95,4 @@ const ChatContainer = ({ conversationId, messages, updateMessages, onNewMessage 
   );
 };
 
-export default ChatContainer;
+export default ChatMetaContainer;

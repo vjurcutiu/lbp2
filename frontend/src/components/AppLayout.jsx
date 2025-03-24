@@ -1,128 +1,70 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import ConversationSidebar from './sidebar/ConversationSidebar';
 import ChatMetaContainer from './chat/ChatMetaContainer';
-import { getConversations, getConversationMessages, processFolder, deleteConversation, renameConversation } from '../services';
+import {
+  fetchConversations,
+  selectConversation,
+  newConversation,
+  fetchConversationMessages,
+} from '../storage/features/conversationSlice';
 
-const ChatLayout = () => {
-  const [conversations, setConversations] = useState([]);
-  const [activeConversationId, setActiveConversationId] = useState(null);
-  const [conversationMessages, setConversationMessages] = useState([]);
-  const [isNewConversation, setIsNewConversation] = useState(false);
+const AppLayout = () => {
+  const { conversationId } = useParams();
+  const dispatch = useDispatch();
+  const { conversations, activeConversationId, conversationMessages } = useSelector(
+    (state) => state.conversations
+  );
 
-  // Fetch conversations on mount.
+  // Log the conversationId from the URL for debugging
   useEffect(() => {
-    const fetchConversations = async () => {
-      try {
-        const convs = await getConversations();
-        setConversations(convs);
-      } catch (error) {
-        console.error("Error fetching conversations:", error);
-      }
-    };
-    fetchConversations();
-  }, []);
+    console.log('URL conversationId:', conversationId);
+  }, [conversationId]);
 
-  // Fetch messages whenever the active conversation changes.
+  // Fetch conversations on mount
   useEffect(() => {
-    if (activeConversationId) {
-      const fetchMessages = async () => {
-        try {
-          const msgs = await getConversationMessages(activeConversationId);
-          setConversationMessages(msgs);
-        } catch (error) {
-          console.error("Error fetching conversation messages:", error);
-          setConversationMessages([]);
-        }
-      };
-      fetchMessages();
+    dispatch(fetchConversations());
+  }, [dispatch]);
+
+  // Update Redux state based on the URL parameter
+  useEffect(() => {
+    if (conversationId) {
+      console.log('Dispatching selectConversation for id:', conversationId);
+      dispatch(selectConversation(Number(conversationId)));
     } else {
-      setConversationMessages([]);
+      console.log('Dispatching newConversation because no conversationId is provided');
+      dispatch(newConversation());
     }
-  }, [activeConversationId]);
+  }, [conversationId, dispatch]);
 
-  const handleSelectConversation = (conversationId) => {
-    setActiveConversationId(conversationId);
-    setIsNewConversation(false);
-  };
-
-  // Handler for new conversation button
-  const handleNewConversation = () => {
-    setActiveConversationId(null);
-    setConversationMessages([]);
-    setIsNewConversation(true);
-  };
-
-  const handleFolderImport = (folderName) => {
-    processFolder({ folder_path: folderName, extension: '.txt' })
-      .then((res) => {
-        console.log('Folder processed:', res);
-      })
-      .catch((err) => console.error('Error processing folder:', err));
-  };
-
-  const handleRenameConversation = async (conversation, newTitle) => {
-    try {
-      const result = await renameConversation(conversation.id, newTitle);
-      console.log(result);
-      setConversations((prevConvs) =>
-        prevConvs.map((conv) =>
-          conv.id === conversation.id ? { ...conv, title: newTitle } : conv
-        )
-      );
-    } catch (error) {
-      console.error('Error renaming conversation:', error);
+  // Fetch messages when a conversation is selected
+  useEffect(() => {
+    if (conversationId) {
+      console.log('Dispatching fetchConversationMessages for id:', conversationId);
+      dispatch(fetchConversationMessages(Number(conversationId)));
     }
-  };
+  }, [conversationId, dispatch]);
 
-  const handleDeleteConversation = async (conversation) => {
-    if (!window.confirm('Are you sure you want to delete this conversation?')) return;
-    try {
-      const result = await deleteConversation(conversation.id);
-      console.log(result);
-      setConversations((prevConvs) => prevConvs.filter((conv) => conv.id !== conversation.id));
-      if (activeConversationId === conversation.id) {
-        setActiveConversationId(null);
-        setConversationMessages([]);
-      }
-    } catch (error) {
-      console.error('Error deleting conversation:', error);
-    }
-  };
-
-  // New function to refresh conversation list.
-  const refreshConversations = async () => {
-    try {
-      const convs = await getConversations();
-      setConversations(convs);
-    } catch (error) {
-      console.error("Error refreshing conversations:", error);
-    }
-  };
+  const conversationIdForChat = conversationId ? Number(conversationId) : null;
+  console.log('Active conversationId for ChatMetaContainer:', conversationIdForChat);
 
   return (
     <div className="flex h-full w-full">
       <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
         <ConversationSidebar
           conversations={conversations}
-          onSelect={handleSelectConversation}
           activeConversationId={activeConversationId}
-          onFolderImport={handleFolderImport}
-          onRenameConversation={handleRenameConversation}
-          onDeleteConversation={handleDeleteConversation}
-          onNewConversation={handleNewConversation}
         />
       </div>
       <div className="flex-1 h-full flex flex-col overflow-y-auto">
         <ChatMetaContainer 
-          conversationId={activeConversationId} 
+          conversationId={conversationIdForChat} 
           messages={conversationMessages}
-          updateMessages={setConversationMessages}
-          isNewConversation={isNewConversation}
-          onNewMessage={refreshConversations}  
         />
       </div>
     </div>
   );
 };
 
-export default ChatLayout;
+export default AppLayout;

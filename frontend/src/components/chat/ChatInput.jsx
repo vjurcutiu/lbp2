@@ -6,10 +6,19 @@ import Input from '../common/Input';
 const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      console.log('Enter key pressed in ChatInput:', { value, disabled });
       e.preventDefault();
       if (!disabled) {
+        console.log('Calling onSend with value:', value);
         onSend(value);
       }
+    }
+  };
+
+  const handleClick = () => {
+    if (!disabled) {
+      console.log('Send button clicked with value:', value);
+      onSend(value);
     }
   };
 
@@ -24,7 +33,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
         className="flex-1 mr-2"
       />
       <Button
-        onClick={() => !disabled && onSend(value)}
+        onClick={handleClick}
         className="bg-gray-200 dark:bg-gray-700"
         disabled={disabled}
       >

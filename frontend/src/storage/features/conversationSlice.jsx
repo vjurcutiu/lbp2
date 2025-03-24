@@ -1,21 +1,29 @@
-// conversationsSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getConversations, getConversationMessages, renameConversation, deleteConversation } from '../../services';
+import {
+  getConversations,
+  getConversationMessages,
+  renameConversation,
+  deleteConversation,
+} from '../../services';
 
-// Async thunk to fetch conversations
+// Async thunk to fetch conversations with a console log
 export const fetchConversations = createAsyncThunk(
   'conversations/fetchConversations',
   async () => {
+    console.log('Fetching conversations...');
     const convs = await getConversations();
+    console.log('Retrieved conversations:', convs);
     return convs;
   }
 );
 
-// Async thunk to fetch messages for a conversation
+// Async thunk to fetch messages for a conversation with a log
 export const fetchConversationMessages = createAsyncThunk(
   'conversations/fetchConversationMessages',
   async (conversationId) => {
+    console.log('Fetching messages for conversationId:', conversationId);
     const msgs = await getConversationMessages(conversationId);
+    console.log('Retrieved messages:', msgs);
     return { conversationId, messages: msgs };
   }
 );
@@ -31,13 +39,16 @@ const conversationsSlice = createSlice({
     error: null,
   },
   reducers: {
-    // Synchronous actions
+    // Set active conversation
     selectConversation: (state, action) => {
+      console.log('Selecting conversation:', action.payload);
       state.activeConversationId = action.payload;
       state.isNewConversation = false;
       state.conversationMessages = [];
     },
+    // Start new conversation
     newConversation: (state) => {
+      console.log('Starting a new conversation');
       state.activeConversationId = null;
       state.conversationMessages = [];
       state.isNewConversation = true;
@@ -62,19 +73,22 @@ const conversationsSlice = createSlice({
     builder
       .addCase(fetchConversations.pending, (state) => {
         state.status = 'loading';
+        console.log('fetchConversations pending...');
       })
       .addCase(fetchConversations.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.conversations = action.payload;
+        console.log('fetchConversations fulfilled. Conversations:', action.payload);
       })
       .addCase(fetchConversations.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.error.message;
+        console.error('fetchConversations failed:', action.error.message);
       })
       .addCase(fetchConversationMessages.fulfilled, (state, action) => {
-        // Only update messages if the fetched conversation matches the active one
         if (state.activeConversationId === action.payload.conversationId) {
           state.conversationMessages = action.payload.messages;
+          console.log('Updated conversation messages for conversationId:', action.payload.conversationId);
         }
       });
   },
