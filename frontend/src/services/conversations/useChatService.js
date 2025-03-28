@@ -1,8 +1,11 @@
 import { useState, useCallback } from 'react';
+import { useDispatch } from 'react-redux';
 import { sendChatMessage } from '../../services';
+import { setNewConversationId } from '../../storage/features/conversationSlice';
 
 export const useChatService = ({ conversationId, onNewMessage, updateMessages }) => {
   const [isWaiting, setIsWaiting] = useState(false);
+  const dispatch = useDispatch();
 
   const handleSend = useCallback(async (inputText) => {
     if (isWaiting) return;
@@ -33,9 +36,13 @@ export const useChatService = ({ conversationId, onNewMessage, updateMessages })
         conversation_id: conversationId,
       });
 
-      // If it’s a new conversation, let the parent know.
+      // If it’s a new conversation, update the state with the new conversation ID.
       if (!conversationId && response.new_conversation_id) {
-        onNewMessage(response.new_conversation_id);
+        dispatch(setNewConversationId(response.new_conversation_id));
+        // Optionally, call the callback if needed.
+        if (onNewMessage) {
+          onNewMessage(response.new_conversation_id);
+        }
       }
 
       // Replace the pending message with the AI response.
@@ -71,7 +78,7 @@ export const useChatService = ({ conversationId, onNewMessage, updateMessages })
     } finally {
       setIsWaiting(false);
     }
-  }, [isWaiting, conversationId, onNewMessage, updateMessages]);
+  }, [isWaiting, conversationId, onNewMessage, updateMessages, dispatch]);
 
   return { handleSend, isWaiting };
 };

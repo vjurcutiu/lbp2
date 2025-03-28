@@ -50,7 +50,6 @@ def search(chat_message, additional_params=None):
         include_metadata=True,
         include_values=False  # values not needed for this example
     )
-    print(results)
 
     # Process results: each match should include metadata fields for keywords, summary, and text.
     processed_results = []

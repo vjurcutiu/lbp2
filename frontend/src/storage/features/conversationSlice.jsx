@@ -68,6 +68,11 @@ const conversationsSlice = createSlice({
         state.conversationMessages = [];
       }
     },
+    setNewConversationId: (state, action) => {
+      console.log('Setting new conversation ID:', action.payload);
+      state.activeConversationId = action.payload;
+      state.isNewConversation = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -100,6 +105,7 @@ export const {
   setConversationMessages,
   renameConversationLocal,
   deleteConversationLocal,
+  setNewConversationId,
 } = conversationsSlice.actions;
 
 export default conversationsSlice.reducer;
