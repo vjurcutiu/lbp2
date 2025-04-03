@@ -43,6 +43,14 @@ const conversationsSlice = createSlice({
       state.isNewConversation = false;
       state.conversationMessages = [];
     },
+    setConversations: (state, action) => {
+      console.log('Updating conversation list:', action.payload);
+      state.conversations = action.payload;
+    },
+    setNewConversationId: (state, action) => {
+      state.activeConversationId = action.payload;
+      state.isNewConversation = false;
+    },
     newConversation: (state) => {
       console.log('Starting a new conversation');
       state.activeConversationId = null;

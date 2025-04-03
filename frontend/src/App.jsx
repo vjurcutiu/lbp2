@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
+import './services/listeners/socketListeners'; // Import to initialize socket listeners
 
 const App = () => {
   return (
