@@ -1,7 +1,5 @@
-// File: useConversationsService.js
-
 import { useDispatch, useSelector } from 'react-redux';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import {
   fetchConversations,
   selectConversation,
@@ -10,12 +8,6 @@ import {
   setConversationMessages
 } from '../../storage/features/conversationSlice';
 
-/**
- * conversationId: string | undefined
- *   - "new" indicates a brand-new conversation route
- *   - a valid numeric string (e.g., "7") indicates an existing conversation ID
- *   - anything else is considered invalid and treated like a new conversation
- */
 export const useConversationsService = (conversationId) => {
   const dispatch = useDispatch();
   const {
@@ -24,6 +16,7 @@ export const useConversationsService = (conversationId) => {
     conversationMessages,
     isNewConversation
   } = useSelector((state) => state.conversations);
+  const hasDispatchedNewConversation = useRef(false);
 
   // Fetch all conversations on mount.
   useEffect(() => {
@@ -33,37 +26,30 @@ export const useConversationsService = (conversationId) => {
   useEffect(() => {
     console.log('useConversationsService effect triggered with conversationId:', conversationId);
 
-    // If the route param is explicitly "new", treat it as a new conversation route.
-    if (conversationId === 'new') {
-      console.log('Route param is "new", dispatching newConversation if not already in that state.');
-      if (!isNewConversation) {
+    // Handle undefined or "new" conversationId.
+    if (conversationId === undefined || conversationId === 'new') {
+      console.log('No valid conversationId provided or route param is "new".');
+      if (!isNewConversation && !hasDispatchedNewConversation.current) {
         dispatch(newConversation());
+        hasDispatchedNewConversation.current = true;
       }
-      return; // Stop here, don’t attempt to parse or fetch.
+      return;
     }
 
-    // If conversationId is nonempty but not 'new', attempt to parse it.
-    if (conversationId) {
-      const numericId = Number(conversationId);
-      if (!isNaN(numericId) && numericId > 0) {
-        console.log('Valid numeric ID. Dispatching selectConversation:', numericId);
-        dispatch(selectConversation(numericId));
-      } else {
-        console.log('conversationId is invalid, treating as new conversation...');
-        if (!isNewConversation) {
-          dispatch(newConversation());
-        }
-      }
+    // Otherwise, parse the conversationId.
+    const numericId = Number(conversationId);
+    if (!isNaN(numericId) && numericId > 0) {
+      console.log('Valid numeric ID. Dispatching selectConversation:', numericId);
+      dispatch(selectConversation(numericId));
     } else {
-      // If there’s no param at all, also treat it as a new conversation.
-      console.log('No conversationId provided, dispatching newConversation if needed.');
-      if (!isNewConversation) {
+      console.log('conversationId is invalid, treating as new conversation...');
+      if (!isNewConversation && !hasDispatchedNewConversation.current) {
         dispatch(newConversation());
+        hasDispatchedNewConversation.current = true;
       }
     }
   }, [conversationId, isNewConversation, dispatch]);
 
-  // Fetch messages only if we have a valid numeric conversationId.
   useEffect(() => {
     if (conversationId && conversationId !== 'new') {
       const numericId = Number(conversationId);
@@ -74,7 +60,6 @@ export const useConversationsService = (conversationId) => {
     }
   }, [conversationId, dispatch]);
 
-  // Custom function to update messages in Redux.
   const updateMessages = useCallback(
     (updater) => {
       dispatch((_, getState) => {

@@ -1,7 +1,7 @@
 import React from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
-import './services/listeners/socketListeners'; // Import to initialize socket listeners
+import './services/listeners/socketListeners';
 
 const App = () => {
   return (
@@ -13,8 +13,8 @@ const App = () => {
         {/* Route for an existing conversation */}
         <Route path="/conversation/:conversationId" element={<AppLayout />} />
         
-        {/* Fallback route */}
-        <Route path="" element={<AppLayout />} />
+        {/* Fallback route: redirect any unknown paths to "/new" */}
+        <Route path="*" element={<Navigate to="/new" replace />} />
       </Routes>
     </HashRouter>
   );
