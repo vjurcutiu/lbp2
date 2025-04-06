@@ -16,6 +16,14 @@ export const fetchConversations = createAsyncThunk(
   }
 );
 
+export const generateNewConversationThunk = () => (dispatch, getState) => {
+  const { conversations } = getState().conversations;
+  // Always compute a new ID using your logic.
+  const newId = Math.max(...conversations.map((c) => c.id), 0) + 1;
+  dispatch(generateNewConversation(newId));
+  return newId;
+};
+
 export const fetchConversationMessages = createAsyncThunk(
   'conversations/fetchConversationMessages',
   async (conversationId) => {
@@ -77,6 +85,29 @@ const conversationsSlice = createSlice({
       state.activeConversationId = action.payload;
       state.isNewConversation = false;
     },
+    clearNewConversationId: (state) => {
+      console.log('Clearing new conversation state');
+      state.activeConversationId = null;
+      state.isNewConversation = false;
+    },
+    clearActiveConversation: (state) => {
+      console.log('Clearing active conversation state');
+      state.activeConversationId = null;
+      state.isNewConversation = true;
+    },
+    generateNewConversation: (state) => {
+      // Find the maximum conversation ID from the list, defaulting to 0 if the list is empty.
+      const maxId = state.conversations.reduce(
+        (max, conv) => (conv.id > max ? conv.id : max),
+        0
+      );
+      const newId = maxId + 1;
+
+      // Set the active conversation to this new ID
+      state.activeConversationId = newId;
+      state.conversationMessages = [];
+      state.isNewConversation = true;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -111,6 +142,8 @@ export const {
   deleteConversationLocal,
   setNewConversationId,
   setConversations,
+  clearActiveConversation,
+  generateNewConversation
 } = conversationsSlice.actions;
 
 export default conversationsSlice.reducer;

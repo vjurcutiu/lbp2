@@ -5,6 +5,7 @@ import { setConversations, setNewConversationId } from '../../storage/features/c
 // Listen for conversation list updates
 socket.on("conversation_list", (newList) => {
   // newList is expected to be the updated conversation list from the backend
+  console.log(newList);
   store.dispatch(setConversations(newList));
 });
 

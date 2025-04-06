@@ -1,15 +1,26 @@
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import ChatHeader from './ChatHeader';
 import ChatWindow from './ChatWindow';
 import ChatInput from './ChatInput';
 import NewChat from './NewChat';
 import { useChatService } from '../../services/conversations/useChatService';
 
-const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMessage }) => {
+const ChatMetaContainer = ({ messages, updateMessages, onNewMessage }) => {
   const [input, setInput] = useState('');
+  
+  // Get conversationID from Redux; if not set, assume a "new" conversation.
+  const activeConversationId = useSelector(
+    (state) => state.conversations.activeConversationId
+  );
+  const conversationId = activeConversationId ? activeConversationId : "new";
 
   // Use the custom hook for sending messages.
-  const { handleSend, isWaiting } = useChatService({ conversationId, onNewMessage, updateMessages });
+  const { handleSend, isWaiting } = useChatService({
+    conversationId,
+    onNewMessage,
+    updateMessages
+  });
 
   const onSend = async (inputText) => {
     await handleSend(inputText);

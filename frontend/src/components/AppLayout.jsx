@@ -1,21 +1,31 @@
 import React from 'react';
+import { useSelector } from 'react-redux';
 import ConversationSidebar from './sidebar/ConversationSidebar';
 import ChatMetaContainer from './chat/ChatMetaContainer';
 import { useConversationsService } from '../services/conversations/useConversationsService';
 import { useNavigation } from '../services/routing/NavigationContext';
 
-const AppLayout = ({ conversationId }) => {
+const AppLayout = () => {
   const { setConversationId } = useNavigation();
+  
+  // Get conversationID from Redux; if none exists, assume a "new" conversation.
+  const activeConversationId = useSelector(
+    (state) => state.conversations.activeConversationId
+  );
+  const conversationIdForChat = activeConversationId ? activeConversationId : "new";
 
-  const conversationIdForChat =
-    conversationId === "new"
-      ? "new"
-      : (!isNaN(Number(conversationId)) ? Number(conversationId) : null);
+  const {
+    conversations,
+    activeConversationId: activeConvIdFromService,
+    conversationMessages,
+    updateMessages
+  } = useConversationsService(conversationIdForChat);
 
-  const { conversations, activeConversationId, conversationMessages, updateMessages } =
-    useConversationsService(conversationId);
+  // When on a "new" conversation, the sidebar should not highlight any conversation.
+  const activeIdForSidebar = conversationIdForChat === "new" ? null : activeConvIdFromService;
 
   const handleNewMessage = (newConversationId) => {
+    // your logic here
   };
 
   return (
@@ -23,14 +33,14 @@ const AppLayout = ({ conversationId }) => {
       <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
         <ConversationSidebar
           conversations={conversations}
-          activeConversationId={activeConversationId}
+          activeConversationId={activeIdForSidebar}
         />
       </div>
       <div className="flex-1 h-full flex flex-col overflow-y-auto">
         <ChatMetaContainer 
-          conversationId={conversationIdForChat} 
           messages={conversationMessages}
           updateMessages={updateMessages}
+          onNewMessage={handleNewMessage}
         />
       </div>
     </div>
