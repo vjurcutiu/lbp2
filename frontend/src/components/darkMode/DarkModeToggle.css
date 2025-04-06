@@ -1,0 +1,21 @@
+/* Custom CSS moon shape */
+.css-moon {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.6);
+  }
+  
+  .css-moon::before {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: #2c3e50; /* This should match your dark background */
+    border-radius: 50%;
+    top: 0;
+    left: 6px; /* Adjust this value to change the crescent's thickness */
+  }
+  

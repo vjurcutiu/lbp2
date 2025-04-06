@@ -24,12 +24,16 @@ const DarkModeToggle = () => {
   return (
     <button
       onClick={toggleDarkMode}
-      className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 focus:outline-none transition-colors duration-300"
-    >
+      className="flex justify-center items-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 focus:outline-none transition-colors duration-300"
+      >
       {isDark ? (
-        <FaMoon className="text-gray-800 dark:text-gray-200" size={20} />
+        <span className="inline-block">
+        <FaMoon />
+        </span>
       ) : (
-        <FaSun className="text-yellow-500" size={20} />
+        <span className="inline-block">
+        <FaSun />
+        </span>
       )}
     </button>
   );
