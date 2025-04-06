@@ -31,7 +31,6 @@ const AppLayout = ({ conversationId }) => {
           conversationId={conversationIdForChat} 
           messages={conversationMessages}
           updateMessages={updateMessages}
-          onNewMessage={handleNewMessage}
         />
       </div>
     </div>

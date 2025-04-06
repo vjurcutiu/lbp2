@@ -18,17 +18,29 @@ export const useConversationsService = (conversationId) => {
   } = useSelector((state) => state.conversations);
   const hasDispatchedNewConversation = useRef(false);
 
+  // Determine the effective conversationId.
+  // If the route param is "new" but we already have a valid activeConversationId, use that.
+  const effectiveConversationId = (
+    conversationId === 'new' && activeConversationId !== null
+  )
+    ? activeConversationId
+    : conversationId;
+
   // Fetch all conversations on mount.
   useEffect(() => {
     dispatch(fetchConversations());
   }, [dispatch]);
 
   useEffect(() => {
-    console.log('useConversationsService effect triggered with conversationId:', conversationId);
+    console.log(
+      'useConversationsService effect triggered with route conversationId:',
+      conversationId,
+      'and activeConversationId:',
+      activeConversationId
+    );
 
-    // Handle undefined or "new" conversationId.
-    if (conversationId === undefined || conversationId === 'new') {
-      console.log('No valid conversationId provided or route param is "new".');
+    if (effectiveConversationId === undefined || effectiveConversationId === 'new') {
+      console.log('No valid conversationId provided or still "new".');
       if (!isNewConversation && !hasDispatchedNewConversation.current) {
         dispatch(newConversation());
         hasDispatchedNewConversation.current = true;
@@ -36,29 +48,34 @@ export const useConversationsService = (conversationId) => {
       return;
     }
 
-    // Otherwise, parse the conversationId.
-    const numericId = Number(conversationId);
+    const numericId = Number(effectiveConversationId);
     if (!isNaN(numericId) && numericId > 0) {
       console.log('Valid numeric ID. Dispatching selectConversation:', numericId);
       dispatch(selectConversation(numericId));
     } else {
-      console.log('conversationId is invalid, treating as new conversation...');
+      console.log('effectiveConversationId is invalid, treating as new conversation...');
       if (!isNewConversation && !hasDispatchedNewConversation.current) {
         dispatch(newConversation());
         hasDispatchedNewConversation.current = true;
       }
     }
-  }, [conversationId, isNewConversation, dispatch]);
+  }, [
+    conversationId,
+    activeConversationId,
+    isNewConversation,
+    dispatch,
+    effectiveConversationId
+  ]);
 
   useEffect(() => {
-    if (conversationId && conversationId !== 'new') {
-      const numericId = Number(conversationId);
+    if (effectiveConversationId && effectiveConversationId !== 'new') {
+      const numericId = Number(effectiveConversationId);
       if (!isNaN(numericId) && numericId > 0) {
         console.log('Fetching messages for conversationId:', numericId);
         dispatch(fetchConversationMessages(numericId));
       }
     }
-  }, [conversationId, dispatch]);
+  }, [effectiveConversationId, dispatch]);
 
   const updateMessages = useCallback(
     (updater) => {

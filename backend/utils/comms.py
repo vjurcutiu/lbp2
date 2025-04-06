@@ -26,7 +26,8 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
             db.session.add(conversation)
             db.session.commit()
             conversation_id = conversation.id
-        is_new = False
+        # Consider the conversation new if it has fewer than two messages.
+        is_new = len(conversation.messages) < 2
     else:
         conversation = Conversation()
         db.session.add(conversation)

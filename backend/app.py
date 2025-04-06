@@ -6,6 +6,7 @@ from routes.extra_routes import extra_bp
 from flask_migrate import Migrate
 from flask_cors import CORS
 from utils.websockets.sockets import socketio  # Import the Socket.IO instance
+from utils.emitters import emitters
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rag_chat.db'

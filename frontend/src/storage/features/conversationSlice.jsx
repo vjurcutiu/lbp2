@@ -73,7 +73,7 @@ const conversationsSlice = createSlice({
       }
     },
     setNewConversationId: (state, action) => {
-      console.log('Setting new conversation ID:', action.payload);
+      console.log('Reducer received new conversation ID:', action.payload);
       state.activeConversationId = action.payload;
       state.isNewConversation = false;
     },

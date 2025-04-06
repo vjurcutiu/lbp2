@@ -14,11 +14,11 @@ def conversation_to_dict(conversation):
 
 @event.listens_for(Conversation, 'after_insert')
 def after_insert_conversation(mapper, connection, target):
-    # Use the current app context to perform a query
     with current_app.app_context():
+        print("after_insert triggered for conversation id:", target.id)
         conversations = Conversation.query.all()
         conversation_list = [conversation_to_dict(conv) for conv in conversations]
-        # Emit the full list of conversations to all connected clients
+        print("Emitting conversation_list:", conversation_list)
         socketio.emit('conversation_list', conversation_list)
-        # Emit the new conversation id to all connected clients
+        print("Emitting new_conversation with id:", target.id)
         socketio.emit('new_conversation', {'id': target.id})

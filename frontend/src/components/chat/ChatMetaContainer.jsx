@@ -22,7 +22,7 @@ const ChatMetaContainer = ({ conversationId, messages, updateMessages, onNewMess
       {messages.length > 0 ? (
         <ChatWindow messages={messages} />
       ) : (
-        <NewChat messages={messages} onNewMessage={onNewMessage} />
+        <NewChat messages={messages} />
       )}
       <ChatInput
         value={input}

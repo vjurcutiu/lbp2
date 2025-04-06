@@ -36,6 +36,9 @@ export const useChatService = ({ conversationId, onNewMessage, updateMessages })
         conversation_id: conversationId,
       });
 
+      console.log("Backend response:", response);
+
+
       // If it’s a new conversation, update the state with the new conversation ID.
       if (!conversationId && response.new_conversation_id) {
         dispatch(setNewConversationId(response.new_conversation_id));
