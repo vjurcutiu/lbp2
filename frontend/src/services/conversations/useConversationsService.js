@@ -1,11 +1,11 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useEffect, useCallback, useRef } from 'react';
 import {
-  fetchConversations,
   selectConversation,
   newConversation,
   fetchConversationMessages,
-  setConversationMessages
+  setConversationMessages,
+  fetchConversations // ensure you have this thunk defined and exported
 } from '../../storage/features/conversationSlice';
 
 export const useConversationsService = (conversationId) => {
@@ -16,20 +16,22 @@ export const useConversationsService = (conversationId) => {
     conversationMessages,
     isNewConversation
   } = useSelector((state) => state.conversations);
+
   const hasDispatchedNewConversation = useRef(false);
 
-  // Determine the effective conversationId.
-  // If the route param is "new" but we already have a valid activeConversationId, use that.
-  const effectiveConversationId = (
-    conversationId === 'new' && activeConversationId !== null
-  )
-    ? activeConversationId
-    : conversationId;
-
-  // Fetch all conversations on mount.
+  // Fallback: if the conversations array is empty, fetch them.
   useEffect(() => {
-    dispatch(fetchConversations());
-  }, [dispatch]);
+    if (conversations.length === 0) {
+      console.log('Conversations array is empty. Fetching conversations...');
+      dispatch(fetchConversations());
+    }
+  }, [conversations, dispatch]);
+
+  // Determine the effective conversationId.
+  const effectiveConversationId =
+    (conversationId === 'new' && activeConversationId !== null)
+      ? activeConversationId
+      : conversationId;
 
   useEffect(() => {
     console.log(

@@ -2,6 +2,7 @@ from flask import current_app
 from sqlalchemy import event
 from db.models import Conversation
 from utils.websockets.sockets import socketio
+from db.models import db  # Adjust the import to match your project structure
 
 def conversation_to_dict(conversation):
     return {
@@ -12,13 +13,6 @@ def conversation_to_dict(conversation):
         'updated_at': conversation.updated_at.isoformat() if conversation.updated_at else None,
     }
 
-@event.listens_for(Conversation, 'after_insert')
-def after_insert_conversation(mapper, connection, target):
-    with current_app.app_context():
-        print("after_insert triggered for conversation id:", target.id)
-        conversations = Conversation.query.all()
-        conversation_list = [conversation_to_dict(conv) for conv in conversations]
-        print("Emitting conversation_list:", conversation_list)
-        socketio.emit('conversation_list', conversation_list)
-        print("Emitting new_conversation with id:", target.id)
-        socketio.emit('new_conversation', {'id': target.id})
+@event.listens_for(db.session, "after_commit")
+def after_commit(session):
+    return

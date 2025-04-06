@@ -1,13 +1,20 @@
 import React from 'react';
-import PropTypes from 'prop-types';
 import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import FolderBrowseButton from './FolderBrowseButton';
-import { clearActiveConversation, generateNewConversation, generateNewConversationThunk, selectConversation } from '../../storage/features/conversationSlice';
+import {
+  clearActiveConversation,
+  generateNewConversationThunk,
+  selectConversation
+} from '../../storage/features/conversationSlice';
 
-const ConversationSidebar = ({ conversations, activeConversationId }) => {
+const ConversationSidebar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  // Subscribe to the Redux store for conversations data.
+  const { conversations, activeConversationId } = useSelector((state) => state.conversations);
+  console.log('conversation update in the sidebar', conversations)
 
   const handleNewConversationClick = async () => {
     const newId = await dispatch(generateNewConversationThunk());
@@ -52,20 +59,6 @@ const ConversationSidebar = ({ conversations, activeConversationId }) => {
       </ul>
     </div>
   );
-};
-
-ConversationSidebar.propTypes = {
-  conversations: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.number.isRequired,
-      title: PropTypes.string,
-    })
-  ).isRequired,
-  activeConversationId: PropTypes.number,
-};
-
-ConversationSidebar.defaultProps = {
-  activeConversationId: null,
 };
 
 export default ConversationSidebar;

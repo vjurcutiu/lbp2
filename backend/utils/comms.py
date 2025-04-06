@@ -1,9 +1,21 @@
 # comms.py
 from db.models import db, Conversation, ConversationMessage
 from utils.ai_apis import send_to_api, openai_api_logic
+from flask import current_app
+from utils.websockets.sockets import socketio
+
 import datetime
 import pendulum
 from utils.search import search
+
+def conversation_to_dict(conversation):
+    return {
+        'id': conversation.id,
+        'title': conversation.title,
+        'meta_data': conversation.meta_data,
+        'created_at': conversation.created_at.isoformat() if conversation.created_at else None,
+        'updated_at': conversation.updated_at.isoformat() if conversation.updated_at else None,
+    }
 
 def process_chat_message(frontend_message, conversation_id=None, additional_params=None):
     """
@@ -26,6 +38,10 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
             db.session.add(conversation)
             db.session.commit()
             conversation_id = conversation.id
+            with current_app.app_context():
+                conversation_list = [conversation_to_dict(c) for c in Conversation.query.all()]
+                socketio.emit('conversation_list', conversation_list)
+                socketio.emit('new_conversation', {'id': conversation.id})
         # Consider the conversation new if it has fewer than two messages.
         is_new = len(conversation.messages) < 2
     else:
