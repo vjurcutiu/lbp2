@@ -1,32 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React from 'react';
 import ConversationSidebar from './sidebar/ConversationSidebar';
 import ChatMetaContainer from './chat/ChatMetaContainer';
 import { useConversationsService } from '../services/conversations/useConversationsService';
+import { useNavigation } from '../services/routing/NavigationContext';
 
-const AppLayout = () => {
-  const { conversationId } = useParams();
-  const navigate = useNavigate();
-  const [hasRedirected, setHasRedirected] = useState(false);
+const AppLayout = ({ conversationId }) => {
+  const { setConversationId } = useNavigation();
 
-  useEffect(() => {
-    if (conversationId === undefined && !hasRedirected) {
-      setHasRedirected(true);
-      navigate('/conversation/new', { replace: true });
-    }
-  }, [conversationId, navigate, hasRedirected]);
-
-  // Convert conversationId to proper type.
   const conversationIdForChat =
-    conversationId === 'new'
-      ? 'new'
-      : (conversationId && !isNaN(Number(conversationId)) ? Number(conversationId) : null);
+    conversationId === "new"
+      ? "new"
+      : (!isNaN(Number(conversationId)) ? Number(conversationId) : null);
 
   const { conversations, activeConversationId, conversationMessages, updateMessages } =
     useConversationsService(conversationId);
 
   const handleNewMessage = (newConversationId) => {
-    navigate(`/conversation/${newConversationId}`);
   };
 
   return (
