@@ -23,9 +23,10 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
       1. Ensuring the conversation exists.
       2. Storing the user's message.
       3. Auto-generating an updated conversation summary context.
-      4. Searching the vector database to retrieve relevant documents.
-      5. Sending the user message along with the enriched context to the AI API.
-      6. Storing the AI's response in the conversation.
+      4. If the conversation is new, generating and saving a title based on the first user message.
+      5. Searching the vector database to retrieve relevant documents.
+      6. Sending the user message along with the enriched context to the AI API.
+      7. Storing the AI's response in the conversation.
       
     Returns a dictionary with conversation details, including a new_conversation_id
     if a new conversation was created.
@@ -60,6 +61,21 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     )
     db.session.add(user_message)
     db.session.commit()
+    
+    # NEW STEP: For new conversations, generate a title based on the first message.
+    if is_new:
+        title_response = send_to_api(frontend_message, openai_api_logic, purpose='convo-name')
+        # Assume the API response has a "content" attribute with the generated title.
+        generated_title = title_response.content.strip() if title_response and hasattr(title_response, 'content') else "No Title"
+        
+        conversation.title = generated_title       
+        print(conversation.title)
+        try:
+            db.session.commit()
+            socketio.emit('conversation_title', {'id': conversation.id, 'title': conversation.title})
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error updating conversation title: {e}")
     
     # Step 3: Update the conversation summary context.
     updated_summary = summarize_conversation(conversation_id, frontend_message, additional_params)
@@ -97,11 +113,13 @@ def process_chat_message(frontend_message, conversation_id=None, additional_para
     
     return {
         "conversation_id": conversation_id,
+        "conversation_title": conversation.title,  # Return the generated title.
         "user_message": frontend_message,
         "ai_response": ai_message.message,
         "context": messages_context,
         "new_conversation_id": conversation_id if is_new else None
     }
+
 
 def summarize_conversation(conversation_id, new_message, additional_params=None):
     """

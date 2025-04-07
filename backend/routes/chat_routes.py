@@ -1,6 +1,7 @@
 # chat_routes.py
 from flask import Blueprint, request, jsonify, current_app
-from utils.comms import process_chat_message, get_all_conversation_ids, get_all_messages_for_conversation, delete_conversation, rename_conversation
+from utils.comms import get_all_conversation_ids, get_all_messages_for_conversation, delete_conversation, rename_conversation
+from utils.comms import process_chat_message
 from db.models import Conversation
 from utils.comms import model_to_dict
 

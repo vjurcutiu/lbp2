@@ -6,7 +6,9 @@ import {
   clearActiveConversation,
   generateNewConversationThunk,
   selectConversation
-} from '../../storage/features/conversationSlice';
+} from '../../services/storage/features/conversationSlice';
+import { FaEdit } from "react-icons/fa";
+import { MdDelete } from "react-icons/md";
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -14,7 +16,7 @@ const ConversationSidebar = () => {
 
   // Subscribe to the Redux store for conversations data.
   const { conversations, activeConversationId } = useSelector((state) => state.conversations);
-  console.log('conversation update in the sidebar', conversations)
+  console.log('conversation update in the sidebar', conversations);
 
   const handleNewConversationClick = async () => {
     const newId = await dispatch(generateNewConversationThunk());
@@ -23,6 +25,18 @@ const ConversationSidebar = () => {
 
   const handleConversationSelect = (conversationId) => {
     dispatch(selectConversation(conversationId));
+  };
+
+  // New handler for editing a conversation
+  const handleEditConversation = (conversationId) => {
+    console.log("Edit conversation:", conversationId);
+    // TODO: Add your edit logic here (e.g., open a modal or inline editor)
+  };
+
+  // New handler for deleting a conversation
+  const handleDeleteConversation = (conversationId) => {
+    console.log("Delete conversation:", conversationId);
+    // TODO: Add your delete logic here (e.g., dispatch a delete action)
   };
 
   return (
@@ -47,13 +61,31 @@ const ConversationSidebar = () => {
                 : 'bg-transparent'
             }`}
           >
-            <Link
-              to={`/conversation/${conv.id}`}
-              className="flex-1"
-              onClick={() => handleConversationSelect(conv.id)}
-            >
-              <span>{conv.title || `Conversation ${conv.id}`}</span>
-            </Link>
+            <div className="flex items-center flex-1">
+              <Link
+                to={`/conversation/${conv.id}`}
+                className="flex-1"
+                onClick={() => handleConversationSelect(conv.id)}
+              >
+                <span>{conv.title || `Conversation ${conv.id}`}</span>
+              </Link>
+              <button 
+                className="flex justify-center items-center ml-2 px-2 py-1 rounded hover:bg-green-400"
+                onClick={() => handleEditConversation(conv.id)}
+              >
+                <span>
+                <FaEdit />
+                </span>
+              </button>
+              <button 
+                className="flex justify-center items-center ml-2 px-2 py-1 rounded hover:bg-red-400"
+                onClick={() => handleDeleteConversation(conv.id)}
+              >
+                <span>
+                <MdDelete/>
+                </span>
+              </button>
+            </div>
           </li>
         ))}
       </ul>

@@ -2,8 +2,26 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import DarkModeToggle from '../darkMode/DarkModeToggle';
+import { useSelector } from 'react-redux';
 
-const ChatHeader = ({ title, onBack, className }) => {
+const ChatHeader = ({ onBack, className }) => {
+  const activeConversationId = useSelector(
+    (state) => state.conversations.activeConversationId
+  );
+  const conversations = useSelector((state) => state.conversations.conversations);
+
+  // Find the active conversation if it exists
+  const conversation = conversations.find(
+    (conv) => conv.id === activeConversationId
+  );
+
+  // If no active conversation, default to "New Conversation"
+  // Otherwise, if conversation exists, use its title, defaulting to "Conversation {ID}" if no title is set.
+  const title =
+    !activeConversationId || !conversation
+      ? 'New Conversation'
+      : conversation.title || `Conversation ${activeConversationId}`;
+
   return (
     <div className={`flex items-center justify-between p-2.5 bg-gray-200 dark:bg-gray-700 w-full shadow-sm mb-[1px] ${className}`}>
       <div className="flex items-center">
@@ -20,7 +38,6 @@ const ChatHeader = ({ title, onBack, className }) => {
 };
 
 ChatHeader.propTypes = {
-  title: PropTypes.string.isRequired,
   onBack: PropTypes.func,
   className: PropTypes.string,
 };

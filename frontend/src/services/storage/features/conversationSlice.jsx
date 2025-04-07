@@ -4,7 +4,7 @@ import {
   getConversationMessages,
   renameConversation,
   deleteConversation,
-} from '../../services';
+} from '../..';
 
 export const fetchConversations = createAsyncThunk(
   'conversations/fetchConversations',
@@ -69,6 +69,7 @@ const conversationsSlice = createSlice({
       const { conversationId, newTitle } = action.payload;
       const conversation = state.conversations.find(conv => conv.id === conversationId);
       if (conversation) {
+        console.log(`Conversation ${conversationId} title updated to: ${newTitle}`);
         conversation.title = newTitle;
       }
     },

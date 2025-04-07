@@ -6,7 +6,7 @@ import {
   fetchConversationMessages,
   setConversationMessages,
   fetchConversations // ensure you have this thunk defined and exported
-} from '../../storage/features/conversationSlice';
+} from '../storage/features/conversationSlice';
 
 export const useConversationsService = (conversationId) => {
   const dispatch = useDispatch();

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { sendChatMessage } from '../../services';
-import { setNewConversationId } from '../../storage/features/conversationSlice';
+import { setNewConversationId } from '../storage/features/conversationSlice';
 
 export const useChatService = ({ conversationId, onNewMessage, updateMessages }) => {
   const [isWaiting, setIsWaiting] = useState(false);
