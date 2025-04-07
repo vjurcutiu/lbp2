@@ -92,51 +92,54 @@ const ConversationSidebar = () => {
 
   return (
     <div 
-      className="w-[250px] border-r border-gray-300 p-4 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full relative" 
+      className="w-[250px] border-r border-gray-300 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full relative" 
       onClick={closeContextMenu}
     >
-      <div className="mb-4">
-        <h2 className="mb-2 text-sm font-semibold">Conversations</h2>
-        <button
-          className="w-full mb-2 px-3 py-1 bg-blue-500 text-black rounded hover:bg-blue-600"
-          onClick={handleNewConversationClick}
-        >
-          <span className='text-sm'>New Conversation</span>
-        </button>
+      {/* Header section aligned with ChatHeader height */}
+      <div className="h-15 flex items-center justify-center border-b border-gray-300">
         <FolderBrowseButton buttonText="Import Files" />
       </div>
 
-      <ul className="list-none p-0 m-0">
-        {conversations.map((conv) => (
-          <li
-          key={conv.id}
-          className={`relative flex items-center justify-between p-2 mb-1 cursor-pointer rounded ${
-            conv.id === activeConversationId ? 'bg-gray-200 dark:bg-gray-700' : 'bg-transparent'
-          }`}
-          onClick={(e) => e.stopPropagation()}
+      <div className="p-4">
+        <h2 className="mb-2 text-sm font-semibold">Conversations</h2>
+        <button
+          className="w-full mb-2 px-3 py-2 bg-blue-500 text-black rounded text-left"
+          onClick={handleNewConversationClick}
         >
-          {/* Add the "group" class to enable group-hover targeting */}
-          <div className="group flex items-center flex-1 rounded border border-transparent hover:bg-gray-200">
-            <Link
-              to={`/conversation/${conv.id}`}
-              className="flex-1 text-sm"
-              onClick={() => handleConversationSelect(conv.id)}
+          <span className="text-sm">New Conversation</span>
+        </button>
+
+        <ul className="list-none p-0 m-0">
+          {conversations.map((conv) => (
+            <li
+              key={conv.id}
+              className={`relative flex items-center justify-between mb-1 cursor-pointer rounded ${
+                conv.id === activeConversationId ? 'bg-gray-200 dark:bg-gray-700' : 'bg-transparent'
+              }`}
+              onClick={(e) => e.stopPropagation()}
             >
-              <span>{conv.title || `Conversation ${conv.id}`}</span>
-            </Link>
-            <div className="relative">
-              <button 
-                ref={buttonRef}
-                className="cursor-pointer flex justify-center items-center ml-2 px-1 py-1 rounded-full bg-transparent border-0 hover:!bg-gray-400 group-hover:!bg-transparent"
-                onClick={(e) => openContextMenu(e, conv)}
-              >
-                <BsThreeDotsVertical />
-              </button>
-            </div>
-          </div>
-        </li>
-        ))}
-      </ul>
+              <div className="group flex items-center px-3 py-2 flex-1 rounded border border-transparent hover:bg-gray-200">
+                <Link
+                  to={`/conversation/${conv.id}`}
+                  className="flex-1 text-sm"
+                  onClick={() => handleConversationSelect(conv.id)}
+                >
+                  <span>{conv.title || `Conversation ${conv.id}`}</span>
+                </Link>
+                <div className="relative">
+                  <button 
+                    ref={buttonRef}
+                    className="cursor-pointer flex justify-center items-center ml-2 px-1 py-1 rounded-full bg-transparent border-0 hover:!bg-gray-400 group-hover:!bg-transparent"
+                    onClick={(e) => openContextMenu(e, conv)}
+                  >
+                    <BsThreeDotsVertical />
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {menuData.open && menuData.conversation && (
         <ContextMenu 
