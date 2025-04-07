@@ -66,7 +66,7 @@ const ConversationSidebar = () => {
   };
 
   const handleDeleteConversation = (conversationId) => {
-
+    deleteConversation(conversationId)
   };
 
   const openContextMenu = (e, conversation) => {

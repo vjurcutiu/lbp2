@@ -4,7 +4,7 @@ from utils.comms import get_all_conversation_ids, get_all_messages_for_conversat
 from utils.comms import process_chat_message
 from db.models import Conversation
 from utils.comms import model_to_dict
-from utils.emitters.emitters import emit_conversation_update
+from utils.emitters.emitters import emit_conversation_update, emit_all_conversations
 
 # Create a blueprint for chat routes.
 chat_bp = Blueprint('chat', __name__)
@@ -96,6 +96,7 @@ def delete_conversation_route():
         result = delete_conversation(conversation_id)
         # Return 200 if deletion was successful, else 400.
         status_code = 200 if "message" in result else 400
+        emit_all_conversations()
         return jsonify(result), status_code
     except Exception as e:
         current_app.logger.error("Error deleting conversation", exc_info=True)
