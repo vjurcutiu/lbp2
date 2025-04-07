@@ -1,8 +1,10 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
-
+require('electron-reload')(path.join(__dirname), {
+  electron: path.join(__dirname, 'node_modules', '.bin', 'electron')
+});
 let mainWindow; // Declare a global variable for the window
-
+const isDev = process.env.NODE_ENV === 'development';
 
 function createWindow() {
   // Create the browser window.
@@ -19,10 +21,12 @@ function createWindow() {
   });
 
   //Menu.setApplicationMenu(null);
-
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173/');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  }
   // Load the React build's index.html file.
-  mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-
   // Open the DevTools if needed:
   // mainWindow.webContents.openDevTools();
 }
