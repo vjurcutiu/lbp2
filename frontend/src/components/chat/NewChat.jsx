@@ -31,9 +31,6 @@ const NewChat = ({ messages }) => {
       className="p-2.5 overflow-y-auto h-full w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
     >
       <div className="flex-grow flex items-center justify-center">
-        <p className="text-lg text-gray-600 dark:text-gray-300">
-          This is the placeholder. No messages yet.
-        </p>
       </div>
     </div>
   );

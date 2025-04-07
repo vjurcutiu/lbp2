@@ -1,6 +1,8 @@
 // src/components/common/FolderBrowseButton.jsx
 import React, { useRef } from 'react';
 import PropTypes from 'prop-types';
+import { FaFileImport } from "react-icons/fa";
+
 
 const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
   // Check if we're running in Electron by detecting the exposed API
@@ -74,9 +76,18 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
 
   return (
     <>
-      <button onClick={handleClick}>
-        {buttonText || 'Browse'}
-      </button>
+        <button
+          onClick={handleClick}
+          className="flex items-center w-full m-2 px-3 py-2 bg-blue-500 text-black rounded text-left space-x-2"
+        >
+          <span>
+            <FaFileImport />
+          </span>
+          <span>
+            {buttonText || 'Browse'}
+          </span>
+        </button>
+
       {/* Render the fallback file input only if not running in Electron */}
       {!isElectron && (
         <input

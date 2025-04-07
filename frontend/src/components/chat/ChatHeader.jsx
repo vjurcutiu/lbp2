@@ -19,11 +19,11 @@ const ChatHeader = ({ onBack, className }) => {
   // Otherwise, if conversation exists, use its title, defaulting to "Conversation {ID}" if no title is set.
   const title =
     !activeConversationId || !conversation
-      ? 'New Conversation'
-      : conversation.title || `Conversation ${activeConversationId}`;
+      ? 'Conversatie Noua'
+      : conversation.title || `Conversatia ${activeConversationId}`;
 
   return (
-    <div className={`flex items-center justify-between p-2.5 bg-gray-200 dark:bg-gray-700 w-full shadow-sm mb-[1px] ${className}`}>
+    <div className={`flex items-center justify-between p-3.5 bg-gray-200 dark:bg-gray-700 w-full shadow-sm ${className}`}>
       <div className="flex items-center">
         {onBack && (
           <button onClick={onBack} className="mr-2.5">
@@ -32,7 +32,6 @@ const ChatHeader = ({ onBack, className }) => {
         )}
         <h2 className="m-0 text-lg">{title}</h2>
       </div>
-      <DarkModeToggle />
     </div>
   );
 };

@@ -97,16 +97,16 @@ const ConversationSidebar = () => {
     >
       {/* Header section aligned with ChatHeader height */}
       <div className="h-15 flex items-center justify-center border-b border-gray-300">
-        <FolderBrowseButton buttonText="Import Files" />
+        <FolderBrowseButton buttonText="Adauga Fisiere" />
       </div>
 
       <div className="p-4">
-        <h2 className="mb-2 text-sm font-semibold">Conversations</h2>
+        <h2 className="mb-2 text-sm font-semibold">Conversatii</h2>
         <button
           className="w-full mb-2 px-3 py-2 bg-blue-500 text-black rounded text-left"
           onClick={handleNewConversationClick}
         >
-          <span className="text-sm">New Conversation</span>
+          <span className="text-sm">Conversatie Noua</span>
         </button>
 
         <ul className="list-none p-0 m-0">

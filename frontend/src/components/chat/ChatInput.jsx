@@ -28,7 +28,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   };
 
   return (
-    <div className="flex items-center w-full p-1 bg-gray-200 dark:bg-gray-700">
+    <div className="flex items-center w-full p-3 bg-gray-200 dark:bg-gray-700">
       <Input
         ref={inputRef}
         value={value}
@@ -40,7 +40,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
       />
       <Button
         onClick={handleClick}
-        className="bg-gray-200 dark:bg-gray-700"
+        className="!bg-gray-300 dark:bg-gray-700 hover:!bg-gray-400"
         disabled={disabled}
       >
         Send
