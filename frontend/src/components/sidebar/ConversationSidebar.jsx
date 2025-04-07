@@ -101,7 +101,7 @@ const ConversationSidebar = () => {
           className="w-full mb-2 px-3 py-1 bg-blue-500 text-black rounded hover:bg-blue-600"
           onClick={handleNewConversationClick}
         >
-          New Conversation
+          <span className='text-sm'>New Conversation</span>
         </button>
         <FolderBrowseButton buttonText="Import Files" />
       </div>
@@ -109,31 +109,32 @@ const ConversationSidebar = () => {
       <ul className="list-none p-0 m-0">
         {conversations.map((conv) => (
           <li
-            key={conv.id}
-            className={`relative flex items-center justify-between p-2 mb-1 cursor-pointer rounded ${
-              conv.id === activeConversationId ? 'bg-gray-200 dark:bg-gray-700' : 'bg-transparent'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center flex-1">
-              <Link
-                to={`/conversation/${conv.id}`}
-                className="flex-1 text-sm"
-                onClick={() => handleConversationSelect(conv.id)}
+          key={conv.id}
+          className={`relative flex items-center justify-between p-2 mb-1 cursor-pointer rounded ${
+            conv.id === activeConversationId ? 'bg-gray-200 dark:bg-gray-700' : 'bg-transparent'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Add the "group" class to enable group-hover targeting */}
+          <div className="group flex items-center flex-1 rounded border border-transparent hover:bg-gray-200">
+            <Link
+              to={`/conversation/${conv.id}`}
+              className="flex-1 text-sm"
+              onClick={() => handleConversationSelect(conv.id)}
+            >
+              <span>{conv.title || `Conversation ${conv.id}`}</span>
+            </Link>
+            <div className="relative">
+              <button 
+                ref={buttonRef}
+                className="cursor-pointer flex justify-center items-center ml-2 px-1 py-1 rounded-full bg-transparent border-0 hover:!bg-gray-400 group-hover:!bg-transparent"
+                onClick={(e) => openContextMenu(e, conv)}
               >
-                <span>{conv.title || `Conversation ${conv.id}`}</span>
-              </Link>
-              <div className="relative">
-                <button 
-                  ref={buttonRef}
-                  className="flex justify-center items-center ml-2 px-2 py-1 rounded hover:bg-green-400"
-                  onClick={(e) => openContextMenu(e, conv)}
-                >
-                  <BsThreeDotsVertical />
-                </button>
-              </div>
+                <BsThreeDotsVertical />
+              </button>
             </div>
-          </li>
+          </div>
+        </li>
         ))}
       </ul>
 
