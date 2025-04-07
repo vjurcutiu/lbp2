@@ -24,3 +24,8 @@ socket.on("conversation_title", (data) => {
   // Assuming renameConversationLocal expects a payload with conversationId and newTitle.
   store.dispatch(renameConversationLocal({ conversationId: data.id, newTitle: data.title }));
 });
+
+socket.on("conversation_update", (data) => {
+  console.log("Received conversation update:", data);
+});
+

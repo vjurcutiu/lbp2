@@ -4,6 +4,7 @@ from utils.comms import get_all_conversation_ids, get_all_messages_for_conversat
 from utils.comms import process_chat_message
 from db.models import Conversation
 from utils.comms import model_to_dict
+from utils.emitters.emitters import emit_conversation_update
 
 # Create a blueprint for chat routes.
 chat_bp = Blueprint('chat', __name__)
