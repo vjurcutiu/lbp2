@@ -11,6 +11,7 @@ import {
 import { FaEdit } from "react-icons/fa";
 import { MdDelete } from "react-icons/md";
 import { BsThreeDotsVertical } from "react-icons/bs";
+import { renameConversation } from '../../services';
 
 const ContextMenu = ({ x, y, conversation, onEdit, onDelete, onClose }) => {
   return ReactDOM.createPortal(
@@ -43,6 +44,9 @@ const ConversationSidebar = () => {
   console.log('conversation update in the sidebar', conversations);
 
   const [menuData, setMenuData] = useState({ open: false, conversation: null, x: 0, y: 0 });
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [renameConversationId, setRenameConversationId] = useState(null);
+  const [newTitle, setNewTitle] = useState("");
   const buttonRef = useRef(null);
 
   const handleNewConversationClick = async () => {
@@ -55,13 +59,15 @@ const ConversationSidebar = () => {
   };
 
   const handleEditConversation = (conversationId) => {
-    console.log("Edit conversation:", conversationId);
-    // TODO: Add your edit logic here (e.g., open a modal or inline editor)
+    const conv = conversations.find(c => c.id === conversationId);
+    setRenameConversationId(conversationId);
+    setNewTitle(conv?.title || "");
+    setIsRenameModalOpen(true);
   };
 
   const handleDeleteConversation = (conversationId) => {
     console.log("Delete conversation:", conversationId);
-    // TODO: Add your delete logic here (e.g., dispatch a delete action)
+    // TODO: Add your delete logic here
   };
 
   const openContextMenu = (e, conversation) => {
@@ -79,6 +85,23 @@ const ConversationSidebar = () => {
     setMenuData({ open: false, conversation: null, x: 0, y: 0 });
   };
 
+  const closeRenameModal = () => {
+    setIsRenameModalOpen(false);
+    setRenameConversationId(null);
+    setNewTitle("");
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameConversationId || !newTitle) return;
+    try {
+      await renameConversation(renameConversationId, newTitle);
+      // Optionally, trigger a sidebar refresh here (or rely on websockets/Redux)
+      closeRenameModal();
+    } catch (error) {
+      console.error("Error renaming conversation", error);
+    }
+  };
+
   return (
     <div 
       className="w-[250px] border-r border-gray-300 p-4 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full relative" 
@@ -94,6 +117,7 @@ const ConversationSidebar = () => {
         </button>
         <FolderBrowseButton buttonText="Import Files" />
       </div>
+
       <ul className="list-none p-0 m-0">
         {conversations.map((conv) => (
           <li
@@ -136,6 +160,28 @@ const ConversationSidebar = () => {
           onDelete={handleDeleteConversation}
           onClose={closeContextMenu}
         />
+      )}
+
+      {isRenameModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-4 rounded shadow-lg w-[300px]">
+            <h3 className="mb-2 text-lg font-semibold">Rename Conversation</h3>
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className="border border-gray-300 p-2 mb-4 w-full"
+            />
+            <div className="flex justify-end">
+              <button className="px-3 py-1 mr-2 bg-gray-300 rounded" onClick={closeRenameModal}>
+                Cancel
+              </button>
+              <button className="px-3 py-1 bg-blue-500 text-white rounded" onClick={handleRenameSubmit}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

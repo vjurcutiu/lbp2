@@ -104,15 +104,6 @@ def delete_conversation_route():
 
 @chat_bp.route('/rename', methods=['POST'])
 def rename_conversation_route():
-    """
-    Endpoint to rename a conversation.
-    
-    Expected JSON payload:
-      {
-          "conversation_id": <conversation id>,
-          "new_title": "New Conversation Title"
-      }
-    """
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid request, JSON required."}), 400
@@ -124,7 +115,12 @@ def rename_conversation_route():
 
     try:
         result = rename_conversation(conversation_id, new_title)
-        status_code = 200 if "message" in result else 400
+        if "message" in result:
+            # Notify clients about the update.
+            emit_conversation_update(conversation_id)
+            status_code = 200
+        else:
+            status_code = 400
         return jsonify(result), status_code
     except Exception as e:
         current_app.logger.error("Error renaming conversation", exc_info=True)
