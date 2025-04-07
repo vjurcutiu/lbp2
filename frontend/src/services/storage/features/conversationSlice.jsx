@@ -18,7 +18,6 @@ export const fetchConversations = createAsyncThunk(
 
 export const generateNewConversationThunk = () => (dispatch, getState) => {
   const { conversations } = getState().conversations;
-  // Always compute a new ID using your logic.
   const newId = Math.max(...conversations.map((c) => c.id), 0) + 1;
   dispatch(generateNewConversation(newId));
   return newId;
@@ -97,19 +96,25 @@ const conversationsSlice = createSlice({
       state.isNewConversation = true;
     },
     generateNewConversation: (state) => {
-      // Find the maximum conversation ID from the list, defaulting to 0 if the list is empty.
       const maxId = state.conversations.reduce(
         (max, conv) => (conv.id > max ? conv.id : max),
         0
       );
       const newId = maxId + 1;
-
-      // Set the active conversation to this new ID
       state.activeConversationId = newId;
       state.conversationMessages = [];
       state.isNewConversation = true;
     },
-  },
+    updateConversationLocal: (state, action) => {
+      const updatedConversation = action.payload;
+      const conversation = state.conversations.find(conv => conv.id === updatedConversation.id);
+      if (conversation) {
+        Object.assign(conversation, updatedConversation);
+        console.log(`Conversation ${updatedConversation.id} updated with:`, updatedConversation);
+      }
+    },
+    
+  },     
   extraReducers: (builder) => {
     builder
       .addCase(fetchConversations.pending, (state) => {
@@ -144,7 +149,8 @@ export const {
   setNewConversationId,
   setConversations,
   clearActiveConversation,
-  generateNewConversation
+  generateNewConversation,
+  updateConversationLocal, // Export the new action
 } = conversationsSlice.actions;
 
 export default conversationsSlice.reducer;

@@ -11,7 +11,7 @@ import {
 import { FaEdit } from "react-icons/fa";
 import { MdDelete } from "react-icons/md";
 import { BsThreeDotsVertical } from "react-icons/bs";
-import { renameConversation } from '../../services';
+import { renameConversation, deleteConversation } from '../../services';
 
 const ContextMenu = ({ x, y, conversation, onEdit, onDelete, onClose }) => {
   return ReactDOM.createPortal(
@@ -66,8 +66,7 @@ const ConversationSidebar = () => {
   };
 
   const handleDeleteConversation = (conversationId) => {
-    console.log("Delete conversation:", conversationId);
-    // TODO: Add your delete logic here
+
   };
 
   const openContextMenu = (e, conversation) => {
