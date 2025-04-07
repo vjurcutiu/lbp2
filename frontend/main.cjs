@@ -9,6 +9,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
+    frame: false,
     webPreferences: {
       nodeIntegration: false,  // For security
       contextIsolation: true,  // Use a preload script for communication
@@ -48,6 +49,29 @@ app.whenReady().then(() => {
     }
   });
 });
+  // IPC handler for minimizing the window
+  ipcMain.handle('minimize-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.minimize();
+  });
+
+  // IPC handler for maximizing/restoring the window
+  ipcMain.handle('maximize-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+
+  // IPC handler for closing the window
+  ipcMain.handle('close-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.close();
+  });
 
 // Quit the app when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {

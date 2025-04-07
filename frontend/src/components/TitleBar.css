@@ -1,0 +1,36 @@
+.titlebar {
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #2e2e2e;
+    color: #fff;
+    height: 30px;
+    padding: 0 10px;
+    user-select: none;
+  }
+  
+  .title {
+    font-size: 14px;
+  }
+  
+  .window-controls {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .window-controls button {
+    -webkit-app-region: no-drag;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+  }
+  
+  .window-controls button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  

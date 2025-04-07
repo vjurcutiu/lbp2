@@ -2,13 +2,12 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import ConversationSidebar from './sidebar/ConversationSidebar';
 import ChatMetaContainer from './chat/ChatMetaContainer';
+import TitleBar from './TitleBar'; // Import your title bar component
 import { useConversationsService } from '../services/conversations/useConversationsService';
 import { useNavigation } from '../services/routing/NavigationContext';
 
 const AppLayout = () => {
   const { setConversationId } = useNavigation();
-  
-  // Get conversationID from Redux; if none exists, assume a "new" conversation.
   const activeConversationId = useSelector(
     (state) => state.conversations.activeConversationId
   );
@@ -21,7 +20,6 @@ const AppLayout = () => {
     updateMessages
   } = useConversationsService(conversationIdForChat);
 
-  // When on a "new" conversation, the sidebar should not highlight any conversation.
   const activeIdForSidebar = conversationIdForChat === "new" ? null : activeConvIdFromService;
 
   const handleNewMessage = (newConversationId) => {
@@ -29,19 +27,22 @@ const AppLayout = () => {
   };
 
   return (
-    <div className="flex h-full w-full">
-      <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
-        <ConversationSidebar
-          conversations={conversations}
-          activeConversationId={activeIdForSidebar}
-        />
-      </div>
-      <div className="flex-1 h-full flex flex-col overflow-y-auto">
-        <ChatMetaContainer 
-          messages={conversationMessages}
-          updateMessages={updateMessages}
-          onNewMessage={handleNewMessage}
-        />
+    <div className="flex h-full flex-col">
+      <TitleBar /> {/* This is your custom titlebar */}
+      <div className="flex flex-1">
+        <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
+          <ConversationSidebar
+            conversations={conversations}
+            activeConversationId={activeIdForSidebar}
+          />
+        </div>
+        <div className="flex-1 h-full flex flex-col overflow-y-auto">
+          <ChatMetaContainer 
+            messages={conversationMessages}
+            updateMessages={updateMessages}
+            onNewMessage={handleNewMessage}
+          />
+        </div>
       </div>
     </div>
   );

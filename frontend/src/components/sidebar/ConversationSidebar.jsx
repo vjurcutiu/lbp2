@@ -41,12 +41,16 @@ const ConversationSidebar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { conversations, activeConversationId } = useSelector((state) => state.conversations);
-  console.log('conversation update in the sidebar', conversations);
 
   const [menuData, setMenuData] = useState({ open: false, conversation: null, x: 0, y: 0 });
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameConversationId, setRenameConversationId] = useState(null);
   const [newTitle, setNewTitle] = useState("");
+
+  // New state for delete confirmation modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConversationId, setDeleteConversationId] = useState(null);
+
   const buttonRef = useRef(null);
 
   const handleNewConversationClick = async () => {
@@ -65,8 +69,24 @@ const ConversationSidebar = () => {
     setIsRenameModalOpen(true);
   };
 
+  // Modified onDelete handler to open delete confirmation modal
   const handleDeleteConversation = (conversationId) => {
-    deleteConversation(conversationId)
+    setDeleteConversationId(conversationId);
+    setIsDeleteModalOpen(true);
+  };
+
+  // Confirm deletion by calling deleteConversation and then closing the modal
+  const confirmDeleteConversation = () => {
+    if (deleteConversationId) {
+      deleteConversation(deleteConversationId);
+      setIsDeleteModalOpen(false);
+      setDeleteConversationId(null);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setDeleteConversationId(null);
   };
 
   const openContextMenu = (e, conversation) => {
@@ -94,7 +114,6 @@ const ConversationSidebar = () => {
     if (!renameConversationId || !newTitle) return;
     try {
       await renameConversation(renameConversationId, newTitle);
-      // Optionally, trigger a sidebar refresh here (or rely on websockets/Redux)
       closeRenameModal();
     } catch (error) {
       console.error("Error renaming conversation", error);
@@ -177,6 +196,23 @@ const ConversationSidebar = () => {
               </button>
               <button className="px-3 py-1 bg-blue-500 text-white rounded" onClick={handleRenameSubmit}>
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-4 rounded shadow-lg w-[300px]">
+            <h3 className="mb-2 text-lg font-semibold">Delete Conversation</h3>
+            <p className="mb-4">Are you sure you want to delete this conversation?</p>
+            <div className="flex justify-end">
+              <button className="px-3 py-1 mr-2 bg-gray-300 rounded" onClick={closeDeleteModal}>
+                Cancel
+              </button>
+              <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={confirmDeleteConversation}>
+                Yes, Delete
               </button>
             </div>
           </div>
