@@ -23,8 +23,15 @@ const ChatMetaContainer = ({ messages, updateMessages, onNewMessage }) => {
   });
 
   const onSend = async (inputText) => {
-    await handleSend(inputText);
-    setInput('');
+    const messageToSend = inputText;
+    setInput('');  // Clear input field immediately
+    try {
+      await handleSend(messageToSend);
+    } catch (error) {
+      console.error('Send failed:', error);
+      // Optionally restore input or show error feedback
+      // setInput(messageToSend);
+    }
   };
 
   return (

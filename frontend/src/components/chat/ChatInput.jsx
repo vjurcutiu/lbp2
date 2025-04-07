@@ -1,15 +1,21 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Button from '../common/Button';
 import Input from '../common/Input';
 
 const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!disabled && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [disabled]);
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      console.log('Enter key pressed in ChatInput:', { value, disabled });
       e.preventDefault();
       if (!disabled) {
-        console.log('Calling onSend with value:', value);
         onSend(value);
       }
     }
@@ -17,7 +23,6 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
 
   const handleClick = () => {
     if (!disabled) {
-      console.log('Send button clicked with value:', value);
       onSend(value);
     }
   };
@@ -25,6 +30,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   return (
     <div className="flex items-center w-full p-1 bg-gray-200 dark:bg-gray-700">
       <Input
+        ref={inputRef}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
