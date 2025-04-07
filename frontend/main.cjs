@@ -12,6 +12,7 @@ function createWindow() {
     width: 1024,
     height: 768,
     frame: false,
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       nodeIntegration: false,  // For security
       contextIsolation: true,  // Use a preload script for communication
