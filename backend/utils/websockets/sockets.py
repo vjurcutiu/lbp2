@@ -1,7 +1,9 @@
 from flask_socketio import SocketIO, emit
+import eventlet
+from engineio.async_drivers import gevent
 
 # Create a SocketIO instance with CORS allowed (modify cors_allowed_origins as needed)
-socketio = SocketIO(cors_allowed_origins="*")
+socketio = SocketIO(cors_allowed_origins="*", async_mode='gevent')
 
 @socketio.on('connect')
 def handle_connect():
