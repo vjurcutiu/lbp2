@@ -3,6 +3,7 @@ from db.models import db, Conversation, ConversationMessage
 from utils.ai_apis import send_to_api, openai_api_logic
 from flask import current_app
 from utils.websockets.sockets import socketio
+import logging
 
 import datetime
 import pendulum
@@ -231,15 +232,23 @@ def delete_conversation(conversation_id):
     Deletes a conversation and all its associated messages and files.
     Uses cascade deletion as defined in the Conversation model.
     """
+    logging.info(f"Attempting to delete conversation with ID: {conversation_id}")
     conversation = Conversation.query.get(conversation_id)
     if not conversation:
+        logging.warning(f"Conversation with ID {conversation_id} not found.")
         return {"error": "Conversation not found."}
+    
+    # Optional: log some details about the conversation before deletion.
+    logging.info(f"Found conversation: {conversation.title} (ID: {conversation_id}). Proceeding with deletion.")
+    
     db.session.delete(conversation)
     try:
         db.session.commit()
+        logging.info(f"Successfully deleted conversation with ID: {conversation_id}")
         return {"message": f"Conversation {conversation_id} deleted successfully."}
     except Exception as e:
         db.session.rollback()
+        logging.error(f"Error deleting conversation with ID {conversation_id}: {e}")
         return {"error": f"Error deleting conversation: {e}"}
 
 

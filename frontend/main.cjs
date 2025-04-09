@@ -3,8 +3,17 @@ const path = require('path');
 require('electron-reload')(path.join(__dirname), {
   electron: path.join(__dirname, 'node_modules', '.bin', 'electron')
 });
+
 let mainWindow; // Declare a global variable for the window
+
+const { spawn } = require('child_process');
+
 const isDev = process.env.NODE_ENV === 'development';
+const isProd = process.env.NODE_ENV === 'production';
+
+global.flaskPort = null;
+
+console.log("NODE_ENV:", process.env.NODE_ENV);
 
 function createWindow() {
   // Create the browser window.
@@ -21,11 +30,54 @@ function createWindow() {
     },
   });
 
+  if (isProd) {
+    const exePath = path.join(__dirname, 'lexbot_flask.exe');
+  
+    // Spawn the Flask process with stdout piped
+    const flaskProcess = spawn(exePath, [], {
+      cwd: __dirname,
+      stdio: ['inherit', 'pipe', 'inherit']  // Pipe stdout for listening
+    });
+  
+    flaskProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(output);  // Optional: log everything the Flask backend prints
+  
+      // Look for port message from app.py
+      const match = output.match(/Starting Flask app on port (\d+)/);
+      if (match && match[1]) {
+        global.flaskPort = match[1];
+        console.log('Detected Flask server running on port:', global.flaskPort);
+        mainWindow.webContents.send('flask-port', global.flaskPort);
+        mainWindow.webContents.openDevTools(); 
+
+  
+        // Now you can initialize your frontend connection using this port
+        // Example: mainWindow.webContents.send('flask-port-ready', flaskPort);
+      }
+    });
+  
+    flaskProcess.on('error', (err) => {
+      console.error('Failed to start lexbot_flask.exe:', err);
+    });
+  
+    flaskProcess.on('close', (code) => {
+      console.log(`lexbot_flask.exe exited with code ${code}`);
+    });
+  } else {
+    console.log('Development mode - lexbot_flask.exe is not started.');
+  }
+
   //Menu.setApplicationMenu(null);
   if (isDev) {
+    console.log('running in dev')
     mainWindow.loadURL('http://localhost:5173/');
+    mainWindow.webContents.openDevTools(); 
+
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    mainWindow.webContents.openDevTools(); 
+
   }
   // Load the React build's index.html file.
   // Open the DevTools if needed:

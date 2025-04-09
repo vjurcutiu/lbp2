@@ -1,5 +1,18 @@
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000"); // adjust URL as needed
+let socket = null;
 
-export default socket;
+export const connectSocket = (port) => {
+    const finalPort = port || 5000;
+    if (socket) {
+      socket.disconnect();
+    }
+    socket = io(`http://localhost:${finalPort}`);
+    socket.on("connect", () => {
+      console.log("Socket connected on port", finalPort);
+    });
+    socket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error);
+    });
+    return socket;
+  };

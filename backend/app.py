@@ -1,3 +1,5 @@
+from gevent import monkey
+monkey.patch_all()
 import socket
 from flask import Flask
 from db.models import db
