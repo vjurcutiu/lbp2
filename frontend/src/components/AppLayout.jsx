@@ -27,16 +27,16 @@ const AppLayout = () => {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <TitleBar /> {/* This is your custom titlebar */}
-      <div className="flex flex-1">
+    <div className="flex h-screen flex-col overflow-hidden">
+      <TitleBar />
+      <div className="flex flex-1 overflow-hidden">
         <div className="basis-[250px] bg-gray-100 h-full overflow-y-auto">
           <ConversationSidebar
             conversations={conversations}
             activeConversationId={activeIdForSidebar}
           />
         </div>
-        <div className="flex-1 h-full flex flex-col overflow-y-auto">
+        <div className="flex-1 h-full flex flex-col overflow-hidden">
           <ChatMetaContainer 
             messages={conversationMessages}
             updateMessages={updateMessages}
