@@ -2,7 +2,9 @@
   "main": "main.cjs",
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "A short description of your app",
+  "author": "Your Name <you@example.com>",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -70,7 +72,11 @@
   },
   "config": {
     "forge": {
-      "packagerConfig": {},
+      "packagerConfig": {
+        "asar": {
+          "unpack": "flask/**"
+        }
+      },
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
@@ -92,5 +98,5 @@
         }
       ]
     }
-  }
+  }  
 }
