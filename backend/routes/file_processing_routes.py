@@ -1,102 +1,117 @@
-# file_processing_routes.py
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response, current_app
+import uuid
 from utils.file_processing import scan_and_add_files, process_files_for_metadata, upsert_files_to_vector_db
+import json
 
-file_bp = Blueprint('file', __name__)
+file_bp = Blueprint('files', __name__, url_prefix='/files')
 
-@file_bp.route('/process_folder', methods=['POST'])
+@file_bp.route('/process_folder', methods=['GET', 'POST'])
 def process_folder():
-    """
-    Endpoint to process a folder selected by the user.
+    # Determine input source (JSON or form/query parameters)
+    if request.is_json:
+        data = request.get_json()
+        folder_path = data.get("folder_path")
+        extension = data.get("extension") or ".txt"
+        conversation_id = data.get("conversation_id")
+    else:
+        folder_path = request.values.get("folder_path")
+        extension = request.values.get("extension") or ".txt"
+        conversation_id = request.values.get("conversation_id")
 
-    Expected JSON payload:
-    {
-        "folder_path": "path/to/the/folder",
-        "extension": ".txt",
-        "conversation_id": <optional integer>
-    }
+    # Enforce required parameters for POST requests
+    if request.method == 'POST':
+        if not folder_path or not extension:
+            print("Error: Missing folder_path or extension")
+            return jsonify({"error": "Both 'folder_path' and 'extension' are required."}), 400
 
-    Workflow:
-      1. Scan the folder and add matching files to the database.
-      2. Process files to generate metadata for those missing it.
-      3. Upsert the processed files (with metadata) into the vector database.
+    # Capture the actual app instance before leaving the request context.
+    app_instance = current_app._get_current_object()
 
-    Returns:
-      A JSON response with the results from scanning, metadata generation, and vector upsert.
-    """
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "JSON payload required."}), 400
+    # Generate a unique session ID
+    session_id = uuid.uuid4().hex
+    print(f"Starting folder processing session: {session_id}")
+    print(f"Folder path: {folder_path}, Extension: {extension}, Conversation ID: {conversation_id}")
 
-    folder_path = data.get("folder_path")
-    extension = data.get("extension")
-    conversation_id = data.get("conversation_id")  # Optional
+    def inner_generator():
+        results = {'sessionId': session_id}
+        # Validate essential parameter early.
+        if not folder_path:
+            error_msg = "Invalid input: folder_path is required."
+            print(f"Error: {error_msg}")
+            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"            # Terminate generator immediately
+            return
 
-    if not folder_path or not extension:
-        return jsonify({"error": "Both 'folder_path' and 'extension' are required."}), 400
+        try:
+            # Send session ID event
+            session_payload = json.dumps({'sessionId': session_id})
+            print(f"Sending session event with sessionId: {session_id}")
+            yield f"event: session\ndata: {session_payload}\n\n"
 
-    results = {}
+            # Step 1: Scan with progress
+            print("Starting file scan...")
+            def progress_callback(progress):
+                progress_payload = json.dumps({'progress': progress})
+                print(f"Progress update: {progress}")
+                return f"data: {progress_payload}\n\n"
 
-    try:
-        # Step 1: Scan the folder and add files to the database.
-        scan_results = scan_and_add_files(folder_path, extension, conversation_id)
-        results["scan"] = scan_results
-    except Exception as e:
-        results["scan"] = {"error": f"Error scanning folder: {str(e)}"}
+            try:
+                scan_results = scan_and_add_files(folder_path, extension, conversation_id, progress_callback)
+                results["scan"] = scan_results
+                print("File scan complete.")
+            except Exception as e:
+                error_msg = f"Error during file scan: {str(e)}"
+                print(error_msg)
+                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"                # Exit the generator immediately on critical error.
+                return
 
-    try:
-        # Step 2: Process files to generate metadata.
-        metadata_results = process_files_for_metadata()
-        results["metadata_generation"] = metadata_results
-    except Exception as e:
-        results["metadata_generation"] = {"error": f"Error generating metadata: {str(e)}"}
+            yield f"data: {json.dumps({'progress': 33})}\n\n"
 
-    try:
-        # Step 3: Upsert files (with metadata) to the vector database.
-        vector_results = upsert_files_to_vector_db()
-        results["vector_upsert"] = vector_results
-    except Exception as e:
-        results["vector_upsert"] = {"error": f"Error upserting files to vector database: {str(e)}"}
+            # Step 2: Generate metadata
+            print("Starting metadata generation...")
+            try:
+                metadata_results = process_files_for_metadata()
+                results["metadata_generation"] = metadata_results
+                print("Metadata generation complete.")
+            except Exception as e:
+                error_msg = f"Error during metadata generation: {str(e)}"
+                print(error_msg)
+                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+                return
 
-    return jsonify(results), 200
+            yield f"data: {json.dumps({'progress': 66})}\n\n"
 
-@file_bp.route('/test_process_folder', methods=['POST'])
-def test_process_folder():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "JSON payload required."}), 400
+            # Step 3: Upsert vectors
+            print("Starting vector upsert...")
+            try:
+                vector_results = upsert_files_to_vector_db()
+                results["vector_upsert"] = vector_results
+                print("Vector upsert complete.")
+            except Exception as e:
+                error_msg = f"Error during vector upsert: {str(e)}"
+                print(error_msg)
+                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+                return
 
-    folder_path = data.get("folder_path")
-    extension = data.get("extension")
-    conversation_id = data.get("conversation_id")  # Optional
+            yield f"data: {json.dumps({'progress': 100})}\n\n"
 
-    if not folder_path or not extension:
-        return jsonify({"error": "Both 'folder_path' and 'extension' are required."}), 400
+        except Exception as e:
+            error_msg = f"Unexpected error in inner_generator: {str(e)}"
+            print(error_msg)
+            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+            return
 
-    results = {}
+        # Send final data and complete event
+        final_payload = json.dumps(results)
+        print("Sending final data and complete event.")
+        yield f"data: {final_payload}\n\n"
+        yield f"event: complete\ndata: {final_payload}\n\n"
+        return  # End the generator
 
-    try:
-        # Step 1: Scan the folder and add files to the database.
-        scan_results = scan_and_add_files(folder_path, extension, conversation_id)
-        results["scan"] = scan_results
-    except Exception as e:
-        results["scan"] = {"error": f"Error scanning folder: {str(e)}"}
+    def generate():
+        with app_instance.app_context():
+            yield from inner_generator()
 
-    try:
-        # Step 2: Process files to generate metadata.
-        keywords = process_files_for_metadata(type='keywords')
-        results["keywords"] = keywords
-        summary = process_files_for_metadata(type='summary')
-        results["summary"] = summary
-        print(results)
-    except Exception as e:
-        results["metadata_generation"] = {"error": f"Error generating metadata: {str(e)}"}
-    
-    try:
-        # Step 3: Upsert files (with metadata) to the vector database.
-        vector_results = upsert_files_to_vector_db()
-        results["vector_upsert"] = vector_results
-    except Exception as e:
-        results["vector_upsert"] = {"error": f"Error upserting files to vector database: {str(e)}"}
-
-    return jsonify(results), 200
+    return Response(generate(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    })

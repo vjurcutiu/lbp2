@@ -22,7 +22,7 @@ CORS(app)  # Enable CORS for all routes
 
 # Register blueprints
 app.register_blueprint(chat_bp, url_prefix='/conversation')
-app.register_blueprint(file_bp, url_prefix='/files')
+app.register_blueprint(file_bp)  # Blueprint already has its own url_prefix
 app.register_blueprint(extra_bp, url_prefix='/extra')
 app.register_blueprint(info_bp, url_prefix='/info')
 

@@ -5,6 +5,7 @@ import FolderBrowseButton from './FolderBrowseButton';
 import ContextMenu from './ContextMenu';
 import RenameModal from './RenameModal';
 import DeleteModal from './DeleteModal';
+import UploadProgressModal from './UploadProgressModal';
 import {
   generateNewConversationThunk,
   selectConversation
@@ -25,6 +26,8 @@ const ConversationSidebar = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConversationId, setDeleteConversationId] = useState(null);
   const buttonRef = useRef(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showProgressModal, setShowProgressModal] = useState(false);
 
   const handleNewConversationClick = async () => {
     const newId = await dispatch(generateNewConversationThunk());
@@ -102,9 +105,16 @@ const ConversationSidebar = () => {
           buttonText="Adauga Fisiere"
           onFolderSelect={async (folderPath) => {
             try {
-              const result = await processFolder(folderPath);
+              setShowProgressModal(true);
+              setUploadProgress(0);
+              
+              const result = await processFolder(folderPath, ".txt", (progress) => {
+                setUploadProgress(progress);
+              });
+
               console.log('Processing results:', result);
               dispatch(generateNewConversationThunk());
+              setShowProgressModal(false);
             } catch (error) {
               console.error('Folder processing error:', error);
             }
@@ -178,6 +188,13 @@ const ConversationSidebar = () => {
         <DeleteModal 
           onClose={closeDeleteModal}
           onConfirm={confirmDeleteConversation}
+        />
+      )}
+
+      {showProgressModal && (
+        <UploadProgressModal
+          progress={uploadProgress}
+          onCancel={() => setShowProgressModal(false)}
         />
       )}
     </div>

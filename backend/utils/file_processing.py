@@ -6,9 +6,25 @@ from sqlalchemy import or_
 from flask import current_app
 import logging
 
-def scan_and_add_files(path, extension, conversation_id=None):
+def scan_and_add_files(path, extension, conversation_id=None, progress_callback=None):
     added_files = []
     skipped_files = []
+    total_files = 0
+    processed_files = 0
+
+    # First pass to count files
+    if os.path.isfile(path):
+        total_files = 1
+    elif os.path.isdir(path):
+        for root, dirs, files in os.walk(path):
+            total_files += len([f for f in files if f.lower().endswith(extension.lower())])
+
+    def update_progress():
+        nonlocal processed_files
+        processed_files += 1
+        if progress_callback and total_files > 0:
+            progress = int((processed_files / total_files) * 100)
+            progress_callback(progress)
 
     if os.path.isfile(path):
         # Process a single file
