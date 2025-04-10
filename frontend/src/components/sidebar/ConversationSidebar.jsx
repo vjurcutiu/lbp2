@@ -11,6 +11,7 @@ import {
 } from '../../services/storage/features/conversationSlice';
 import { renameConversation, deleteConversation } from '../../services';
 import { BsThreeDotsVertical } from 'react-icons/bs';
+import {processFolder} from'../../services/'
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -97,7 +98,19 @@ const ConversationSidebar = () => {
     >
       {/* Header section aligned with ChatHeader height */}
       <div className="h-15 flex items-center justify-center border-b border-gray-300">
-        <FolderBrowseButton buttonText="Adauga Fisiere" />
+        <FolderBrowseButton 
+          buttonText="Adauga Fisiere"
+          onFolderSelect={async (folderPath) => {
+            try {
+              const result = await processFolder(folderPath);
+              console.log('Processing results:', result);
+              dispatch(generateNewConversationThunk());
+            } catch (error) {
+              console.error('Folder processing error:', error);
+            }
+          }}
+          onError={(error) => console.error('File selection error:', error)}
+        />
       </div>
 
       <div className="p-4">

@@ -43,6 +43,30 @@ def get_free_port(start_port=5000, max_port=5100):
                 continue
     raise RuntimeError("No free port found in the specified range.")
 
+@app.cli.command("prepare-reprocessing")
+def prepare_reprocessing():
+    """Mark all documents for reprocessing"""
+    from db.models import File
+    
+    with app.app_context():
+        if input("Mark ALL documents for reprocessing? (y/n): ").lower() == 'y':
+            # Reset upload status and clear existing embeddings
+            File.query.update({'is_uploaded': False})
+            db.session.commit()
+            print(f"Marked {File.query.count()} documents for reprocessing")
+        else:
+            print("Cancelled")
+
+@app.cli.command("reprocess-documents")
+def reprocess_documents():
+    """Custom Flask command to reprocess all documents"""
+    from utils.file_processing import upsert_files_to_vector_db
+    
+    with app.app_context():
+        print("Starting document reprocessing...")
+        results = upsert_files_to_vector_db()
+        print(f"Successfully processed {len(results)} documents")
+
 if __name__ == '__main__':
     port = get_free_port()
     print(f"Starting Flask app on port {port}")

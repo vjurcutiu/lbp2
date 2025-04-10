@@ -1,7 +1,14 @@
-// src/services/folderApi.js
 import apiClient from './apiClient';
 
-//FIXME: 
-export const processFolder = (payload) => {
-  return apiClient.post('/files/process_folder', payload);
+export const processFolder = async (folderPath, extension = ".txt") => {
+  try {
+    const response = await apiClient.post('/files/process_folder', {
+      folder_path: folderPath,
+      extension: extension
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Folder processing error:', error);
+    throw error;
+  }
 };

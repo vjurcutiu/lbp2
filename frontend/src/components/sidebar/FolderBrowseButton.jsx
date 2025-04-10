@@ -14,6 +14,9 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
     try {
       const selectedPaths = await window.electronAPI.selectFolderOrFile();
       if (selectedPaths && selectedPaths.length > 0) {
+        if (typeof onFolderSelect !== 'function') {
+          throw new Error('onFolderSelect prop must be a function');
+        }
         // If one item is selected, pass it as a string; if multiple, pass the array.
         if (selectedPaths.length === 1) {
           onFolderSelect(selectedPaths[0]);
@@ -63,6 +66,9 @@ const FolderBrowseButton = ({ onFolderSelect, buttonText, onError }) => {
         selectedPaths.push(files[i].name);
       }
       // If only one file is selected, send it as a string; otherwise, send the array.
+      if (typeof onFolderSelect !== 'function') {
+        throw new Error('onFolderSelect prop must be a function');
+      }
       if (selectedPaths.length === 1) {
         onFolderSelect(selectedPaths[0]);
       } else {

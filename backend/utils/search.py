@@ -26,7 +26,8 @@ def search(chat_message, additional_params=None):
         additional_params = {}
     index_name = additional_params.get("index_name", "test")
     namespace = additional_params.get("namespace", "default-namespace")
-    top_k = additional_params.get("top_k", 3)
+    top_k = additional_params.get("top_k", 10)
+    threshold = additional_params.get("threshold", 0.7)
     
     # Load the Pinecone API key from the environment variables.
     api_key = os.getenv("PINECONE_API_KEY")
@@ -37,7 +38,9 @@ def search(chat_message, additional_params=None):
     pc = Pinecone(api_key=api_key)
     
     # Embed the chat message using the query embedding (using the same model as for upsert).
-    query_embedding = send_to_api(chat_message, openai_api_logic, purpose='embeddings')
+    # Enhanced retrieval-optimized query formatting
+    retrieval_query = f"Represent this sentence for searching relevant passages: {chat_message}"
+    query_embedding = send_to_api(retrieval_query, openai_api_logic, purpose='embeddings')
 
     # Get a handle for the desired index.
     index = pc.Index(index_name)
@@ -53,7 +56,11 @@ def search(chat_message, additional_params=None):
 
     # Process results: each match should include metadata fields for keywords, summary, and text.
     processed_results = []
-    for match in results.get("matches", []):
+    # Filter and sort matches by relevance score
+    filtered_matches = [match for match in results.get("matches", []) if match.get("score", 0) >= threshold]
+    filtered_matches.sort(key=lambda x: x["score"], reverse=True)
+    
+    for match in filtered_matches:
         metadata = match.get("metadata", {})
         processed_results.append({
             "id": match.get("id"),

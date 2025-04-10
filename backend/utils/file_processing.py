@@ -238,8 +238,9 @@ def upsert_files_to_vector_db():
             
             if file_text:
                 
-                # Generate embeddings using the AI API.
-                api_response = send_to_api(file_text, openai_api_logic, purpose='embeddings')
+                # Generate embeddings with retrieval-optimized formatting
+                retrieval_text = f"Represent this document for searching relevant passages: {file_text}"
+                api_response = send_to_api(retrieval_text, openai_api_logic, purpose='embeddings')
                 
                 if api_response is not None:
                     # Extract embeddings from the API response.
