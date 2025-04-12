@@ -2,33 +2,30 @@ import apiClient, { createSSEConnection } from './apiClient';
 
 export const processFolder = async (folderPath, extension = ".txt", onProgress) => {
   try {
-    // First create processing session via API client
-    // Create SSE connection first to listen for session ID
-    const eventSource = createSSEConnection('/files/process_folder');
-    
-    // Send POST request with folder data
-    await apiClient.post('/files/process_folder', {
+    // Step 1: Call the POST endpoint to start processing.
+    const response = await apiClient.post('/files/process_folder', {
       folder_path: folderPath,
       extension: extension || ".txt"
     });
 
-    // Wait for session ID from SSE
-    const sessionId = await new Promise((resolve, reject) => {
-      eventSource.addEventListener('session', (event) => {
-        const { sessionId } = JSON.parse(event.data);
-        resolve(sessionId);
-      });
+    // Since the response interceptor returns response.data directly,
+    // we destructure sessionId directly from response.
+    const { sessionId } = response;
+    if (!sessionId) {
+      throw new Error('Missing session ID in response.');
+    }
 
-      eventSource.addEventListener('error', (error) => {
-        reject(new Error(`Session ID error: ${error.message}`));
-      });
-    });
+    // Step 2: Open the SSE connection with the session id as a query parameter.
+    const eventSource = createSSEConnection(`/files/process_folder?session_id=${sessionId}`);
 
+    // Listen for progress updates.
     eventSource.addEventListener('progress', (event) => {
+      console.log(event.data);
       const data = JSON.parse(event.data);
       onProgress(data.value);
     });
 
+    // Listen for the completion event.
     return new Promise((resolve, reject) => {
       eventSource.addEventListener('complete', (event) => {
         resolve(JSON.parse(event.data));
@@ -36,7 +33,6 @@ export const processFolder = async (folderPath, extension = ".txt", onProgress) 
       });
 
       eventSource.addEventListener('error', (error) => {
-        console.error("SSE error event received:", error); // Full object logging
         const errMsg = error && error.message ? error.message : "Unknown SSE error";
         reject(new Error(`SSE Error: ${errMsg}`));
         eventSource.close();

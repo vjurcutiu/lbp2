@@ -1,117 +1,112 @@
 from flask import Blueprint, request, jsonify, Response, current_app
 import uuid
-from utils.file_processing import scan_and_add_files, process_files_for_metadata, upsert_files_to_vector_db
 import json
+import threading
+import time
+
+# Import your processing functions; adjust these imports to your actual modules.
+from utils.file_processing import scan_and_add_files, process_files_for_metadata, upsert_files_to_vector_db
 
 file_bp = Blueprint('files', __name__, url_prefix='/files')
 
-@file_bp.route('/process_folder', methods=['GET', 'POST'])
-def process_folder():
-    # Determine input source (JSON or form/query parameters)
-    if request.is_json:
-        data = request.get_json()
-        folder_path = data.get("folder_path")
-        extension = data.get("extension") or ".txt"
-        conversation_id = data.get("conversation_id")
-    else:
-        folder_path = request.values.get("folder_path")
-        extension = request.values.get("extension") or ".txt"
-        conversation_id = request.values.get("conversation_id")
+# A simple global in-memory store for processing sessions.
+processing_sessions = {}
 
-    # Enforce required parameters for POST requests
-    if request.method == 'POST':
-        if not folder_path or not extension:
-            print("Error: Missing folder_path or extension")
-            return jsonify({"error": "Both 'folder_path' and 'extension' are required."}), 400
+@file_bp.route('/process_folder', methods=['POST'])
+def start_process_folder():
+    """
+    This endpoint starts the folder processing. It requires a JSON payload with:
+      - folder_path: path to the folder to process
+      - extension: file extension filter (defaults to ".txt")
+    It creates a session and kicks off a background thread to process the folder.
+    Returns a sessionId for tracking.
+    """
+    data = request.get_json()
+    folder_path = data.get("folder_path")
+    extension = data.get("extension") or ".txt"
 
-    # Capture the actual app instance before leaving the request context.
-    app_instance = current_app._get_current_object()
+    if not folder_path or not extension:
+        error_msg = "Both 'folder_path' and 'extension' are required."
+        return jsonify({"error": error_msg}), 400
 
-    # Generate a unique session ID
     session_id = uuid.uuid4().hex
-    print(f"Starting folder processing session: {session_id}")
-    print(f"Folder path: {folder_path}, Extension: {extension}, Conversation ID: {conversation_id}")
+    processing_sessions[session_id] = {"progress": 0, "final": None}
 
-    def inner_generator():
-        results = {'sessionId': session_id}
-        # Validate essential parameter early.
-        if not folder_path:
-            error_msg = "Invalid input: folder_path is required."
-            print(f"Error: {error_msg}")
-            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"            # Terminate generator immediately
+    # Capture the real app instance from the current context.
+    my_app = current_app._get_current_object()
+
+    # Start background processing and pass the app instance.
+    threading.Thread(target=process_folder_task, args=(folder_path, extension, session_id, my_app)).start()
+
+    return jsonify({"sessionId": session_id})
+
+@file_bp.route('/process_folder', methods=['GET'])
+def stream_process_folder():
+    """
+    This endpoint uses Server-Sent Events (SSE) to stream progress updates and the final result.
+    It expects a query parameter "session_id" to know which session to stream.
+    """
+    session_id = request.args.get("session_id")
+    if not session_id or session_id not in processing_sessions:
+        error_msg = "Invalid or missing session_id."
+        return Response(f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n", mimetype='text/event-stream')
+
+    def event_stream():
+        while True:
+            session = processing_sessions.get(session_id)
+            if session is None:
+                break
+
+            progress_payload = json.dumps({'progress': session['progress']})
+            yield f"data: {progress_payload}\n\n"
+
+            if session.get("final") is not None:
+                final_payload = json.dumps(session["final"])
+                yield f"event: complete\ndata: {final_payload}\n\n"
+                del processing_sessions[session_id]
+                break
+
+            time.sleep(1)
+
+    return Response(event_stream(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
+
+def process_folder_task(folder_path, extension, session_id, app):
+    """
+    This function runs in a background thread and performs the folder processing.
+    It updates the global processing_sessions dictionary with progress and final results.
+    The app instance is passed to establish the proper application context.
+    """
+    with app.app_context():
+        results = {}
+        try:
+            app.logger.info(f"Session {session_id}: starting file scan...")
+            scan_results = scan_and_add_files(folder_path, extension)
+            results["scan"] = scan_results
+            processing_sessions[session_id]["progress"] = 33
+            app.logger.info(f"Session {session_id}: file scan complete. Progress 33%.")
+        except Exception as e:
+            processing_sessions[session_id]["final"] = {"error": f"Error during file scan: {str(e)}"}
             return
 
         try:
-            # Send session ID event
-            session_payload = json.dumps({'sessionId': session_id})
-            print(f"Sending session event with sessionId: {session_id}")
-            yield f"event: session\ndata: {session_payload}\n\n"
-
-            # Step 1: Scan with progress
-            print("Starting file scan...")
-            def progress_callback(progress):
-                progress_payload = json.dumps({'progress': progress})
-                print(f"Progress update: {progress}")
-                return f"data: {progress_payload}\n\n"
-
-            try:
-                scan_results = scan_and_add_files(folder_path, extension, conversation_id, progress_callback)
-                results["scan"] = scan_results
-                print("File scan complete.")
-            except Exception as e:
-                error_msg = f"Error during file scan: {str(e)}"
-                print(error_msg)
-                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"                # Exit the generator immediately on critical error.
-                return
-
-            yield f"data: {json.dumps({'progress': 33})}\n\n"
-
-            # Step 2: Generate metadata
-            print("Starting metadata generation...")
-            try:
-                metadata_results = process_files_for_metadata()
-                results["metadata_generation"] = metadata_results
-                print("Metadata generation complete.")
-            except Exception as e:
-                error_msg = f"Error during metadata generation: {str(e)}"
-                print(error_msg)
-                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
-                return
-
-            yield f"data: {json.dumps({'progress': 66})}\n\n"
-
-            # Step 3: Upsert vectors
-            print("Starting vector upsert...")
-            try:
-                vector_results = upsert_files_to_vector_db()
-                results["vector_upsert"] = vector_results
-                print("Vector upsert complete.")
-            except Exception as e:
-                error_msg = f"Error during vector upsert: {str(e)}"
-                print(error_msg)
-                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
-                return
-
-            yield f"data: {json.dumps({'progress': 100})}\n\n"
-
+            app.logger.info(f"Session {session_id}: starting metadata generation...")
+            metadata_results = process_files_for_metadata()
+            results["metadata_generation"] = metadata_results
+            processing_sessions[session_id]["progress"] = 66
+            app.logger.info(f"Session {session_id}: metadata generation complete. Progress 66%.")
         except Exception as e:
-            error_msg = f"Unexpected error in inner_generator: {str(e)}"
-            print(error_msg)
-            yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+            processing_sessions[session_id]["final"] = {"error": f"Error during metadata generation: {str(e)}"}
             return
 
-        # Send final data and complete event
-        final_payload = json.dumps(results)
-        print("Sending final data and complete event.")
-        yield f"data: {final_payload}\n\n"
-        yield f"event: complete\ndata: {final_payload}\n\n"
-        return  # End the generator
+        try:
+            app.logger.info(f"Session {session_id}: starting vector upsert...")
+            vector_results = upsert_files_to_vector_db()
+            results["vector_upsert"] = vector_results
+            processing_sessions[session_id]["progress"] = 100
+            app.logger.info(f"Session {session_id}: vector upsert complete. Progress 100%.")
+        except Exception as e:
+            processing_sessions[session_id]["final"] = {"error": f"Error during vector upsert: {str(e)}"}
+            return
 
-    def generate():
-        with app_instance.app_context():
-            yield from inner_generator()
-
-    return Response(generate(), mimetype='text/event-stream', headers={
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-    })
+        processing_sessions[session_id]["final"] = results
