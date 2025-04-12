@@ -79,6 +79,37 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
         'skipped': skipped_files
     }
 
+# Modified helper to support list inputs
+def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_callback=None):
+    """
+    A wrapper to allow scan_and_add_files to accept either a single file/folder path or a list of paths.
+    
+    Args:
+      paths (str or list[str]): A single path or a list of paths.
+      extension (str): The file extension filter.
+      conversation_id (optional): An optional conversation ID.
+      progress_callback (optional): A callback function for progress updates.
+    
+    Returns:
+      dict: A dictionary containing 'added' and 'skipped' files aggregated across all inputs.
+    """
+    # Check if paths is a list.
+    if isinstance(paths, list):
+        # Initialize aggregated result lists.
+        aggregated_results = {
+            'added': [],
+            'skipped': []
+        }
+        for path in paths:
+            # Process each file/folder separately.
+            result = scan_and_add_files(path, extension, conversation_id, progress_callback)
+            aggregated_results['added'].extend(result.get('added', []))
+            aggregated_results['skipped'].extend(result.get('skipped', []))
+        return aggregated_results
+    else:
+        # Single path provided, so process normally.
+        return scan_and_add_files(paths, extension, conversation_id, progress_callback)
+
 def extract_text_from_file(file_path):
     """
     Extracts text content from a file based on its file extension.

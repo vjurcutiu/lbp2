@@ -5,7 +5,7 @@ import threading
 import time
 
 # Import your processing functions; adjust these imports to your actual modules.
-from utils.file_processing import scan_and_add_files, process_files_for_metadata, upsert_files_to_vector_db
+from utils.file_processing import scan_and_add_files, process_files_for_metadata, upsert_files_to_vector_db, scan_and_add_files_wrapper
 
 file_bp = Blueprint('files', __name__, url_prefix='/files')
 
@@ -58,7 +58,9 @@ def stream_process_folder():
                 break
 
             progress_payload = json.dumps({'progress': session['progress']})
-            yield f"data: {progress_payload}\n\n"
+            yield f"event: progress\ndata: {json.dumps({ 'value': session['progress'] })}\n\n"
+
+
 
             if session.get("final") is not None:
                 final_payload = json.dumps(session["final"])
@@ -81,7 +83,7 @@ def process_folder_task(folder_path, extension, session_id, app):
         results = {}
         try:
             app.logger.info(f"Session {session_id}: starting file scan...")
-            scan_results = scan_and_add_files(folder_path, extension)
+            scan_results = scan_and_add_files_wrapper(folder_path, extension)
             results["scan"] = scan_results
             processing_sessions[session_id]["progress"] = 33
             app.logger.info(f"Session {session_id}: file scan complete. Progress 33%.")
