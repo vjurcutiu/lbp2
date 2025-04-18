@@ -4,20 +4,17 @@ from flask import Blueprint, request, jsonify, Response, current_app
 import uuid, json, threading, time, os
 from dotenv import load_dotenv
 
-from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-
 from db.models import File, db
-from pinecone.grpc import PineconeGRPC as Pinecone
-
 from utils.file_processing import (
     scan_and_add_files_wrapper,
     process_files_for_metadata,
     upsert_files_to_vector_db
 )
+from utils.pinecone_client import PineconeClient
 
-load_dotenv()  # for PINECONE_API_KEY, PINECONE_INDEX, PINECONE_NAMESPACE
+load_dotenv()  # for PINECONE_API_KEY, PINECONE_ENV, PINECONE_INDEX, PINECONE_NAMESPACE
 
 file_bp = Blueprint('files', __name__, url_prefix='/files')
 
@@ -27,6 +24,7 @@ processing_sessions = {}
 
 class CancellationException(Exception):
     pass
+
 
 def cleanup_session(session_id):
     """
@@ -56,13 +54,11 @@ def cleanup_session(session_id):
         files = File.query.filter(File.file_path.in_(paths)).all()
         ids = [f.id for f in files]
 
-    # 3) Delete vectors in Pinecone
+    # 3) Delete vectors in Pinecone using client
     if ids:
         try:
-            pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-            index = pc.Index(os.getenv("PINECONE_INDEX", "test"))
-            namespace = os.getenv("PINECONE_NAMESPACE", "default-namespace")
-            index.delete(ids=ids, namespace=namespace)
+            namespace = os.getenv("PINECONE_NAMESPACE")
+            PineconeClient.delete(ids=ids, namespace=namespace)
         except Exception as e:
             current_app.logger.error(f"[cleanup] Pinecone delete error for {session_id}: {e}")
 

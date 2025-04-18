@@ -1,10 +1,11 @@
 import os
 from db.models import db, File
 from utils.ai_apis import send_to_api, openai_api_logic  # You can swap out openai_api_logic with another API function as needed
-from utils.vector_apis import send_to_vector_db, pinecone_vector_logic
+from utils.pinecone_client import PineconeClient
 from sqlalchemy import or_
 from flask import current_app
 import logging
+
 
 def scan_and_add_files(path, extension, conversation_id=None, progress_callback=None):
     added_files = []
@@ -40,7 +41,7 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
                     file_extension=file_ext,
                     conversation_id=conversation_id,
                     is_uploaded=False,
-                    metadata=None
+                    meta_data=None
                 )
                 db.session.add(new_file)
                 added_files.append(full_path)
@@ -61,7 +62,7 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
                         file_extension=file_ext,
                         conversation_id=conversation_id,
                         is_uploaded=False,
-                        metadata=None
+                        meta_data=None
                     )
                     db.session.add(new_file)
                     added_files.append(full_path)
@@ -79,263 +80,150 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
         'skipped': skipped_files
     }
 
-# Modified helper to support list inputs
+
 def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_callback=None):
     """
     A wrapper to allow scan_and_add_files to accept either a single file/folder path or a list of paths.
-    
-    Args:
-      paths (str or list[str]): A single path or a list of paths.
-      extension (str): The file extension filter.
-      conversation_id (optional): An optional conversation ID.
-      progress_callback (optional): A callback function for progress updates.
-    
-    Returns:
-      dict: A dictionary containing 'added' and 'skipped' files aggregated across all inputs.
     """
-    # Check if paths is a list.
     if isinstance(paths, list):
-        # Initialize aggregated result lists.
-        aggregated_results = {
-            'added': [],
-            'skipped': []
-        }
+        aggregated_results = {'added': [], 'skipped': []}
         for path in paths:
-            # Process each file/folder separately.
             result = scan_and_add_files(path, extension, conversation_id, progress_callback)
             aggregated_results['added'].extend(result.get('added', []))
             aggregated_results['skipped'].extend(result.get('skipped', []))
         return aggregated_results
     else:
-        # Single path provided, so process normally.
         return scan_and_add_files(paths, extension, conversation_id, progress_callback)
 
+
 def extract_text_from_file(file_path):
-    """
-    Extracts text content from a file based on its file extension.
-    
-    Supported formats include:
-      - Plain text files (.txt, .md, .csv)
-      - PDF files (.pdf) using PyPDF2
-      - Word documents (.docx, .doc) using python-docx
-    
-    For unsupported file types, an empty string is returned.
-    
-    Args:
-        file_path (str): The path to the file.
-    
-    Returns:
-        str: The extracted text content, or an empty string if extraction fails or if the format is unsupported.
-    """
-    # Get the file extension in lower case
     _, extension = os.path.splitext(file_path)
     extension = extension.lower()
 
     if extension in ['.txt', '.md', '.csv']:
-        # For plain text, markdown, or CSV files, read the file as text.
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
+            current_app.logger.error(f"Error reading {file_path}: {e}")
             return ""
-    
     elif extension == '.pdf':
-        # For PDFs, use PyPDF2 to extract text.
         try:
             from PyPDF2 import PdfReader
             reader = PdfReader(file_path)
             text = ""
             for page in reader.pages:
-                # Some PDFs might have pages with no extractable text.
-                page_text = page.extract_text() or ""
-                text += page_text
+                text += page.extract_text() or ""
             return text
         except Exception as e:
-            print(f"Error extracting text from PDF {file_path}: {e}")
+            current_app.logger.error(f"Error extracting text from PDF {file_path}: {e}")
             return ""
-    
     elif extension in ['.doc', '.docx']:
-        # For Word documents, use python-docx.
         try:
             import docx
             doc = docx.Document(file_path)
-            text = "\n".join([para.text for para in doc.paragraphs])
-            return text
+            return "\n".join([para.text for para in doc.paragraphs])
         except Exception as e:
-            print(f"Error extracting text from Word document {file_path}: {e}")
+            current_app.logger.error(f"Error extracting text from Word document {file_path}: {e}")
             return ""
-    
     else:
-        # If the file format is not supported, log a message and return an empty string.
-        print(f"Unsupported file extension: {extension} for file {file_path}")
+        current_app.logger.warning(f"Unsupported file extension: {extension} for file {file_path}")
         return ""
 
+
 def get_files_without_metadata_text():
-    """
-    Checks the database for files that have no metadata.
-    For each such file, it extracts text from the file and returns a list of dictionaries,
-    each containing the filename and its contents.
-    
-    Returns:
-        list[dict]: A list of dictionaries where each dictionary has:
-            - 'filename': The file's path.
-            - 'contents': The text extracted from the file.
-    """
-    # Query for files that have no metadata.
-    files_without_metadata = File.query.filter(
-        or_(File.meta_data.is_(None), File.meta_data == {})
-        ).all()
-    
+    files = File.query.filter(or_(File.meta_data.is_(None), File.meta_data == {})).all()
     results = []
-    for file_entry in files_without_metadata:
-        if os.path.exists(file_entry.file_path):
-            file_text = extract_text_from_file(file_entry.file_path)
+    for f in files:
+        if os.path.exists(f.file_path):
+            contents = extract_text_from_file(f.file_path)
         else:
-            file_text = ""
-            print(f"File not found: {file_entry.file_path}")
-        
-        results.append({
-            'filename': file_entry.file_path,
-            'contents': file_text
-        })
-    
+            contents = ""
+            current_app.logger.warning(f"File not found: {f.file_path}")
+        results.append({'filename': f.file_path, 'contents': contents})
     return results
 
+
 def process_files_for_metadata(type='keywords', progress_callback=None):
-    """
-    Processes files one-by-one for metadata generation. For each file that either has
-    no metadata or is missing the metadata key (specified by 'type'), this function:
-      - Extracts text from the file.
-      - Sends the text to an API (using the provided AI API logic).
-      - Stores the API response under the metadata key.
-    
-    After processing each file, if a progress_callback is provided, it is called with:
-         progress_callback(processed_files, total_files)
-    so that the caller can update overall progress accordingly.
-    
-    Returns:
-        list[dict]: Results for each processed file.
-    """
-    # Use the 'type' parameter as the metadata key.
     meta_key = type
     current_app.logger.info(f"meta_key: {meta_key}")
-    
     try:
         all_files = File.query.all()
-        current_app.logger.info(f"Total files retrieved: {len(all_files)}")
-        # Filter out files that already have metadata for this key.
-        files_to_process = [
-            file_entry for file_entry in all_files
-            if (file_entry.meta_data is None) or 
-               (isinstance(file_entry.meta_data, dict) and meta_key not in file_entry.meta_data)
-        ]
-        current_app.logger.info(f"Files to process for metadata: {[f.file_path for f in files_to_process]}")
+        to_process = [f for f in all_files if f.meta_data is None or (isinstance(f.meta_data, dict) and meta_key not in f.meta_data)]
     except Exception as e:
-        current_app.logger.error("Error during query: %s", e)
+        current_app.logger.error(f"Error querying files: {e}")
         raise
 
     results = []
-    total_files = len(files_to_process)
-    processed_count = 0
-
-    for file_entry in files_to_process:
-        if os.path.exists(file_entry.file_path):
-            file_text = extract_text_from_file(file_entry.file_path)
-            if file_text:
+    total = len(to_process)
+    count = 0
+    for f in to_process:
+        if os.path.exists(f.file_path):
+            text = extract_text_from_file(f.file_path)
+            if text:
                 try:
-                    # Send file text to API to get metadata (using the AI API logic)
-                    api_response = send_to_api(file_text, openai_api_logic, purpose=type)
-                    if api_response is not None:
-                        # Initialize metadata field if necessary.
-                        if file_entry.meta_data is None:
-                            file_entry.meta_data = {}
-                        file_entry.meta_data[meta_key] = api_response.content
-                        results.append({
-                            "file_path": file_entry.file_path,
-                            "meta_data": api_response.content
-                        })
+                    api_resp = send_to_api(text, openai_api_logic, purpose=type)
+                    if api_resp:
+                        f.meta_data = f.meta_data or {}
+                        f.meta_data[meta_key] = api_resp.content
+                        results.append({'file_path': f.file_path, 'meta_data': api_resp.content})
                 except Exception as e:
-                    current_app.logger.error(f"Error processing metadata for {file_entry.file_path}: {e}")
+                    current_app.logger.error(f"Error processing metadata for {f.file_path}: {e}")
         else:
-            current_app.logger.warning(f"File not found: {file_entry.file_path}")
-
-        processed_count += 1
-        # Call the progress callback with the current count and total files for this phase.
+            current_app.logger.warning(f"File not found: {f.file_path}")
+        count += 1
         if progress_callback:
-            progress_callback(processed_count, total_files)
-
+            progress_callback(count, total)
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error updating database: {e}")
-
+        current_app.logger.error(f"Error committing metadata: {e}")
     return results
 
 
 def upsert_files_to_vector_db(progress_callback=None):
     """
-    Processes files one-by-one for vector upsert. For every file that has metadata but has not
-    been uploaded to the vector database (is_uploaded == False), this function:
-      - Extracts the file text.
-      - Generates embeddings (via an AI API using retrieval-optimized formatting).
-      - Upserts the embeddings to the vector database.
-      - Marks the file as uploaded.
-    
-    After processing each file, if a progress_callback is provided, it is called with:
-         progress_callback(processed_files, total_files)
-    so that the calling route can update overall progress accordingly.
-    
-    Returns:
-        list[dict]: Results for each successfully processed file.
+    Upserts embeddings for files with metadata to Pinecone and marks them uploaded.
     """
-    files_to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
-    current_app.logger.info('Files to upsert: ' + str([f.file_path for f in files_to_upsert]))
+    to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
+    current_app.logger.info(f"Files to upsert: {[f.file_path for f in to_upsert]}")
     results = []
-    total_files = len(files_to_upsert)
-    processed_count = 0
+    total = len(to_upsert)
+    count = 0
+    namespace = os.getenv('PINECONE_NAMESPACE')
 
-    for file_entry in files_to_upsert:
-        if os.path.exists(file_entry.file_path):
-            file_text = extract_text_from_file(file_entry.file_path)
-            if file_text:
-                # Prepare the text in a retrieval-friendly format.
-                retrieval_text = f"Represent this document for searching relevant passages: {file_text}"
+    for f in to_upsert:
+        if os.path.exists(f.file_path):
+            text = extract_text_from_file(f.file_path)
+            if text:
+                retrieval = f"Represent this document for searching relevant passages: {text}"
                 try:
-                    api_response = send_to_api(retrieval_text, openai_api_logic, purpose='embeddings')
-                    if api_response is not None:
-                        embeddings = api_response
-                        if embeddings:
-                            # Upsert the embeddings to the vector database.
-                            vector_response = send_to_vector_db(embeddings, pinecone_vector_logic, filetext=file_text)
-                            if vector_response is not None:
-                                # Mark the file as uploaded so it won't be reprocessed.
-                                file_entry.is_uploaded = True
-                                results.append({
-                                    "file_path": file_entry.file_path,
-                                    "vector_response": str(vector_response)
-                                })
-                            else:
-                                current_app.logger.error(f"Failed to upsert embeddings for {file_entry.file_path}")
-                        else:
-                            current_app.logger.error(f"No embeddings returned for {file_entry.file_path}")
+                    api_resp = send_to_api(retrieval, openai_api_logic, purpose='embeddings')
+                    embeddings = api_resp.values if hasattr(api_resp, 'values') else api_resp
+                    if embeddings:
+                        record = {
+                            'id': str(f.id),
+                            'values': embeddings,
+                            'metadata': {'source_text': text}
+                        }
+                        vc_resp = PineconeClient.upsert([record], namespace=namespace)
+                        f.is_uploaded = True
+                        results.append({'file_path': f.file_path, 'vector_response': vc_resp})
+                    else:
+                        current_app.logger.error(f"No embeddings for {f.file_path}")
                 except Exception as e:
-                    current_app.logger.error(f"Error during vector upsert for {file_entry.file_path}: {e}")
-            else:
-                current_app.logger.error(f"No usable text for embeddings for {file_entry.file_path}")
+                    current_app.logger.error(f"Error upserting {f.file_path}: {e}")
         else:
-            current_app.logger.error(f"File not found: {file_entry.file_path}")
-
-        processed_count += 1
-        # Call the progress callback for each processed file in this phase.
+            current_app.logger.warning(f"File not found: {f.file_path}")
+        count += 1
         if progress_callback:
-            progress_callback(processed_count, total_files)
-            
+            progress_callback(count, total)
+
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error updating database: {e}")
+        current_app.logger.error(f"Error committing vector upload flags: {e}")
 
     return results
