@@ -34,6 +34,7 @@ def pinecone_vector_logic(embeddings, additional_params=None, filetext=''):
         namespace = additional_params.get("namespace", "default-namespace")
         record_id = additional_params.get("id", f"file-{int(time.time())}")
         
+        
         # Load the Pinecone API key from the environment variables.
         api_key = os.getenv("PINECONE_API_KEY")
         if not api_key:

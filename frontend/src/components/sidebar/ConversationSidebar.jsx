@@ -1,3 +1,5 @@
+// ConversationSidebar.jsx
+
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,8 +13,8 @@ import {
   selectConversation
 } from '../../services/storage/features/conversationSlice';
 import { renameConversation, deleteConversation } from '../../services';
+import { processFolder, cancelProcessFolder } from '../../services/folderApi';
 import { BsThreeDotsVertical } from 'react-icons/bs';
-import {processFolder} from'../../services/'
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -25,9 +27,12 @@ const ConversationSidebar = () => {
   const [newTitle, setNewTitle] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConversationId, setDeleteConversationId] = useState(null);
-  const buttonRef = useRef(null);
+
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [currentSession, setCurrentSession] = useState({ id: null, es: null });
+
+  const buttonRef = useRef(null);
 
   const handleNewConversationClick = async () => {
     const newId = await dispatch(generateNewConversationThunk());
@@ -94,31 +99,61 @@ const ConversationSidebar = () => {
     }
   };
 
+  const handleFolderSelect = async (folderPath) => {
+    try {
+      setShowProgressModal(true);
+      setUploadProgress(0);
+
+      // Start processing and get session info + promise
+      const { sessionId, eventSource, resultPromise } = await processFolder(
+        folderPath,
+        ".txt",
+        (progress) => setUploadProgress(progress)
+      );
+
+      // Keep for cancellation later
+      setCurrentSession({ id: sessionId, es: eventSource });
+
+      // Wait for processing to complete
+      await resultPromise;
+
+      // Once done, generate a new conversation and close modal
+      dispatch(generateNewConversationThunk());
+      setShowProgressModal(false);
+      setCurrentSession({ id: null, es: null });
+    } catch (err) {
+      // If cancelled or error, log and simply close modal
+      console.warn(err.message);
+      setShowProgressModal(false);
+      setCurrentSession({ id: null, es: null });
+    }
+  };
+
+  const handleCancelUpload = async () => {
+    // Close the SSE stream so we stop getting updates
+    if (currentSession.es) {
+      currentSession.es.close();
+    }
+    // Tell the server to cancel processing
+    try {
+      await cancelProcessFolder(currentSession.id);
+    } catch (err) {
+      console.error("Failed to cancel processing:", err);
+    }
+    // Hide the modal and reset state
+    setShowProgressModal(false);
+    setCurrentSession({ id: null, es: null });
+  };
+
   return (
-    <div 
-      className="w-[250px] border-r border-gray-300 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full relative" 
+    <div
+      className="w-[250px] border-r border-gray-300 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full relative"
       onClick={closeContextMenu}
     >
-      {/* Header section aligned with ChatHeader height */}
       <div className="h-15 flex items-center justify-center border-b border-gray-300">
-        <FolderBrowseButton 
+        <FolderBrowseButton
           buttonText="Adauga Fisiere"
-          onFolderSelect={async (folderPath) => {
-            try {
-              setShowProgressModal(true);
-              setUploadProgress(0);
-              
-              const result = await processFolder(folderPath, ".txt", (progress) => {
-                setUploadProgress(progress);
-              });
-
-              console.log('Processing results:', result);
-              dispatch(generateNewConversationThunk());
-              setShowProgressModal(false);
-            } catch (error) {
-              console.error('Folder processing error:', error);
-            }
-          }}
+          onFolderSelect={handleFolderSelect}
           onError={(error) => console.error('File selection error:', error)}
         />
       </div>
@@ -150,7 +185,7 @@ const ConversationSidebar = () => {
                   <span>{conv.title || `Conversation ${conv.id}`}</span>
                 </Link>
                 <div className="relative">
-                  <button 
+                  <button
                     ref={buttonRef}
                     className="cursor-pointer flex justify-center items-center ml-2 px-1 py-1 rounded-full bg-transparent border-0 hover:!bg-gray-400 group-hover:!bg-transparent"
                     onClick={(e) => openContextMenu(e, conv)}
@@ -165,9 +200,9 @@ const ConversationSidebar = () => {
       </div>
 
       {menuData.open && menuData.conversation && (
-        <ContextMenu 
-          x={menuData.x} 
-          y={menuData.y} 
+        <ContextMenu
+          x={menuData.x}
+          y={menuData.y}
           conversation={menuData.conversation}
           onEdit={handleEditConversation}
           onDelete={handleDeleteConversation}
@@ -176,7 +211,7 @@ const ConversationSidebar = () => {
       )}
 
       {isRenameModalOpen && (
-        <RenameModal 
+        <RenameModal
           newTitle={newTitle}
           setNewTitle={setNewTitle}
           onClose={closeRenameModal}
@@ -185,7 +220,7 @@ const ConversationSidebar = () => {
       )}
 
       {isDeleteModalOpen && (
-        <DeleteModal 
+        <DeleteModal
           onClose={closeDeleteModal}
           onConfirm={confirmDeleteConversation}
         />
@@ -194,7 +229,7 @@ const ConversationSidebar = () => {
       {showProgressModal && (
         <UploadProgressModal
           progress={uploadProgress}
-          onCancel={() => setShowProgressModal(false)}
+          onCancel={handleCancelUpload}
         />
       )}
     </div>

@@ -1,58 +1,124 @@
-from flask import Blueprint, request, jsonify, Response, current_app
-import uuid
-import json
-import threading
-import time
+# file_processing_routes.py
 
-# Import the updated processing functions.
+from flask import Blueprint, request, jsonify, Response, current_app
+import uuid, json, threading, time, os
+from dotenv import load_dotenv
+
+from sqlalchemy import delete
+from sqlalchemy.orm import Session
+
+
+from db.models import File, db
+from pinecone.grpc import PineconeGRPC as Pinecone
+
 from utils.file_processing import (
     scan_and_add_files_wrapper,
     process_files_for_metadata,
     upsert_files_to_vector_db
 )
 
+load_dotenv()  # for PINECONE_API_KEY, PINECONE_INDEX, PINECONE_NAMESPACE
+
 file_bp = Blueprint('files', __name__, url_prefix='/files')
 
-# Global in-memory store for processing sessions.
+# In‑memory sessions:
+#   progress: int, final: dict|None, cancelled: bool, file_items: list
 processing_sessions = {}
+
+class CancellationException(Exception):
+    pass
+
+def cleanup_session(session_id):
+    """
+    Remove any files added in this session from SQL and Pinecone.
+    Handles file IDs (int), file_paths (str), or dicts with 'id' keys.
+    """
+    session = processing_sessions.get(session_id)
+    if not session:
+        return
+
+    items = session.get('file_items', [])
+    if not items:
+        return
+
+    # 1) Normalize to DB IDs and file_paths
+    ids, paths = [], []
+    for x in items:
+        if isinstance(x, int):
+            ids.append(x)
+        elif isinstance(x, dict) and 'id' in x:
+            ids.append(x['id'])
+        elif isinstance(x, str):
+            paths.append(x)
+
+    # 2) If we only got paths, look up their IDs
+    if not ids and paths:
+        files = File.query.filter(File.file_path.in_(paths)).all()
+        ids = [f.id for f in files]
+
+    # 3) Delete vectors in Pinecone
+    if ids:
+        try:
+            pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+            index = pc.Index(os.getenv("PINECONE_INDEX", "test"))
+            namespace = os.getenv("PINECONE_NAMESPACE", "default-namespace")
+            index.delete(ids=ids, namespace=namespace)
+        except Exception as e:
+            current_app.logger.error(f"[cleanup] Pinecone delete error for {session_id}: {e}")
+
+    # 4) Delete rows in SQL
+    if ids:
+        try:
+            File.query.filter(File.id.in_(ids)).delete(synchronize_session=False)
+            db.session.commit()
+        except Exception as e:
+            current_app.logger.error(f"[cleanup] DB delete error for {session_id}: {e}")
+
 
 @file_bp.route('/process_folder', methods=['POST'])
 def start_process_folder():
-    data = request.get_json()
+    data = request.get_json() or {}
     folder_path = data.get("folder_path")
-    extension = data.get("extension") or ".txt"
+    extension = data.get("extension", ".txt")
 
     if not folder_path or not extension:
-        error_msg = "Both 'folder_path' and 'extension' are required."
-        return jsonify({"error": error_msg}), 400
+        return jsonify({"error": "Both 'folder_path' and 'extension' are required."}), 400
 
     session_id = uuid.uuid4().hex
-    processing_sessions[session_id] = {"progress": 0, "final": None}
+    processing_sessions[session_id] = {
+        "progress": 0,
+        "final": None,
+        "cancelled": False,
+        "file_items": []
+    }
 
-    my_app = current_app._get_current_object()
-
-    # Start background processing in a separate thread.
-    threading.Thread(target=process_folder_task, args=(folder_path, extension, session_id, my_app)).start()
+    threading.Thread(
+        target=process_folder_task,
+        args=(folder_path, extension, session_id, current_app._get_current_object())
+    ).start()
 
     return jsonify({"sessionId": session_id})
+
 
 @file_bp.route('/process_folder', methods=['GET'])
 def stream_process_folder():
     session_id = request.args.get("session_id")
-    if not session_id or session_id not in processing_sessions:
-        error_msg = "Invalid or missing session_id."
-        return Response(f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n", mimetype='text/event-stream')
+    if session_id not in processing_sessions:
+        return Response(
+            "event: error\ndata: " + json.dumps({"error": "Invalid or missing session_id."}) + "\n\n",
+            mimetype='text/event-stream'
+        )
 
     def event_stream():
         while True:
-            session = processing_sessions.get(session_id)
-            if session is None:
+            sess = processing_sessions.get(session_id)
+            if sess is None:
                 break
 
-            yield f"event: progress\ndata: {json.dumps({'value': session['progress']})}\n\n"
+            yield f"event: progress\ndata: {json.dumps({'value': sess['progress']})}\n\n"
 
-            if session.get("final") is not None:
-                yield f"event: complete\ndata: {json.dumps(session['final'])}\n\n"
+            if sess.get("final") is not None:
+                yield f"event: complete\ndata: {json.dumps(sess['final'])}\n\n"
                 del processing_sessions[session_id]
                 break
 
@@ -64,71 +130,88 @@ def stream_process_folder():
         headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'}
     )
 
+
+@file_bp.route('/process_folder/cancel', methods=['POST'])
+def cancel_process_folder():
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+    if session_id in processing_sessions:
+        sess = processing_sessions[session_id]
+        sess["cancelled"] = True
+
+        # Immediately clean up DB & Pinecone
+        cleanup_session(session_id)
+
+        # Mark final so SSE client sees cancellation
+        sess["final"] = {"error": "Processing cancelled by user"}
+        return jsonify({"status": "cancelled"}), 200
+
+    return jsonify({"error": "Invalid or missing session_id."}), 400
+
+
 def process_folder_task(folder_path, extension, session_id, app):
-    """
-    This function runs in a background thread. It processes files in three phases:
-      1. File Scan and Add – scanning is done without tracking progress.
-      2. Metadata Generation – this phase is tracked from 0% to 50%.
-      3. Vector Upsert – this phase is tracked from 50% to 100%.
-    """
     with app.app_context():
         results = {}
+        sess = processing_sessions[session_id]
 
-        # -------------------------------
-        # PHASE 1: File Scan and Add
-        # -------------------------------
+        # PHASE 1: Scan & add
         try:
-            app.logger.info(f"Session {session_id}: Starting folder scan...")
-            scan_results = scan_and_add_files_wrapper(folder_path, extension)
-            results["scan"] = scan_results
-            app.logger.info(f"Session {session_id}: Scan complete.")
+            if sess["cancelled"]:
+                raise CancellationException()
+
+            scan_res = scan_and_add_files_wrapper(folder_path, extension)
+            results["scan"] = scan_res
+            sess["file_items"] = scan_res.get("added", [])
+
+        except CancellationException:
+            cleanup_session(session_id)
+            sess["final"] = {"error": "Processing cancelled by user"}
+            return
         except Exception as e:
-            processing_sessions[session_id]["final"] = {"error": f"Error during file scan: {str(e)}"}
+            sess["final"] = {"error": f"Error during file scan: {e}"}
             return
 
-        # Reset progress to 0% once scanning is done.
-        processing_sessions[session_id]["progress"] = 0
-
-        # -------------------------------
-        # PHASE 2: Metadata Generation
-        # (Progress from 0% up to 50%)
-        # -------------------------------
+        # PHASE 2: Metadata (0→50%)
+        sess["progress"] = 0
         try:
-            # Base progress for metadata phase is 0%.
-            base_progress = 0
+            def meta_cb(done, total):
+                if sess["cancelled"]:
+                    raise CancellationException()
+                sess["progress"] = int(done/total*50)
 
-            def metadata_progress_callback(processed, total):
-                # Scale each file processed in this phase into a 50% range.
-                new_progress = base_progress + (processed / total) * 50
-                processing_sessions[session_id]["progress"] = int(new_progress)
+            meta_res = process_files_for_metadata(
+                type="keywords",
+                progress_callback=meta_cb
+            )
+            results["metadata_generation"] = meta_res
+            sess["progress"] = 50
 
-            metadata_results = process_files_for_metadata(type="keywords", progress_callback=metadata_progress_callback)
-            results["metadata_generation"] = metadata_results
-            # Ensure that if the phase completes, progress is exactly 50%.
-            processing_sessions[session_id]["progress"] = 50
-            app.logger.info(f"Session {session_id}: Metadata generation complete.")
+        except CancellationException:
+            cleanup_session(session_id)
+            sess["final"] = {"error": "Processing cancelled by user"}
+            return
         except Exception as e:
-            processing_sessions[session_id]["final"] = {"error": f"Error during metadata generation: {str(e)}"}
+            sess["final"] = {"error": f"Error during metadata generation: {e}"}
             return
 
-        # -------------------------------
-        # PHASE 3: Vector Upsert
-        # (Progress from 50% up to 100%)
-        # -------------------------------
+        # PHASE 3: Vector upsert (50→100%)
         try:
-            base_progress = 50
+            def vec_cb(done, total):
+                if sess["cancelled"]:
+                    raise CancellationException()
+                sess["progress"] = 50 + int(done/total*50)
 
-            def vector_progress_callback(processed, total):
-                new_progress = base_progress + (processed / total) * 50
-                processing_sessions[session_id]["progress"] = int(new_progress)
+            vec_res = upsert_files_to_vector_db(progress_callback=vec_cb)
+            results["vector_upsert"] = vec_res
+            sess["progress"] = 100
 
-            vector_results = upsert_files_to_vector_db(progress_callback=vector_progress_callback)
-            results["vector_upsert"] = vector_results
-            # Ensure final progress is 100%.
-            processing_sessions[session_id]["progress"] = 100
-            app.logger.info(f"Session {session_id}: Vector upsert complete.")
+        except CancellationException:
+            cleanup_session(session_id)
+            sess["final"] = {"error": "Processing cancelled by user"}
+            return
         except Exception as e:
-            processing_sessions[session_id]["final"] = {"error": f"Error during vector upsert: {str(e)}"}
+            sess["final"] = {"error": f"Error during vector upsert: {e}"}
             return
 
-        processing_sessions[session_id]["final"] = results
+        # All done successfully
+        sess["final"] = results

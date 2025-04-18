@@ -1,44 +1,55 @@
+// folderApi.jsx
+
 import apiClient, { createSSEConnection } from './apiClient';
 
 export const processFolder = async (folderPath, extension = ".txt", onProgress) => {
-  try {
-    // Step 1: Call the POST endpoint to start processing.
-    const response = await apiClient.post('/files/process_folder', {
-      folder_path: folderPath,
-      extension: extension || ".txt"
+  // 1) Kick off the job and get a session ID
+  const { sessionId } = await apiClient.post('/files/process_folder', {
+    folder_path: folderPath,
+    extension: extension || ".txt"
+  });
+  if (!sessionId) throw new Error('Missing session ID in response.');
+
+  // 2) Open the SSE connection for progress updates
+  const eventSource = createSSEConnection(
+    `/files/process_folder?session_id=${sessionId}`
+  );
+
+  // 3) Listen for progress events
+  eventSource.addEventListener('progress', (e) => {
+    const { value } = JSON.parse(e.data);
+    onProgress(value);
+  });
+
+  // 4) Wrap the final “complete” and any SSE error into a promise
+  const resultPromise = new Promise((resolve, reject) => {
+    eventSource.addEventListener('complete', (e) => {
+      const data = JSON.parse(e.data);
+      if (data.error) {
+        // e.g. “Processing cancelled by user”
+        reject(new Error(data.error));
+      } else {
+        resolve(data);
+      }
+      eventSource.close();
     });
 
-    // Since the response interceptor returns response.data directly,
-    // we destructure sessionId directly from response.
-    const { sessionId } = response;
-    if (!sessionId) {
-      throw new Error('Missing session ID in response.');
-    }
-
-    // Step 2: Open the SSE connection with the session id as a query parameter.
-    const eventSource = createSSEConnection(`/files/process_folder?session_id=${sessionId}`);
-
-    // Listen for progress updates.
-    eventSource.addEventListener('progress', (event) => {
-      console.log(event.data);
-      const data = JSON.parse(event.data);
-      onProgress(data.value);
+    eventSource.addEventListener('error', (err) => {
+      const msg = err?.message || 'Unknown SSE error';
+      reject(new Error(`SSE Error: ${msg}`));
+      eventSource.close();
     });
+  });
 
-    // Listen for the completion event.
-    return new Promise((resolve, reject) => {
-      eventSource.addEventListener('complete', (event) => {
-        resolve(JSON.parse(event.data));
-        eventSource.close();
-      });
+  // 5) Return the session ID, the EventSource, and the promise for final results
+  return { sessionId, eventSource, resultPromise };
+};
 
-      eventSource.addEventListener('error', (error) => {
-        const errMsg = error && error.message ? error.message : "Unknown SSE error";
-        reject(new Error(`SSE Error: ${errMsg}`));
-        eventSource.close();
-      });
-    });
-  } catch (error) {
-    throw error.response?.data || error;
-  }
+// —————————————————————————————————————————————
+// New helper: cancel an in‑flight processing session
+export const cancelProcessFolder = async (sessionId) => {
+  if (!sessionId) throw new Error('No sessionId provided');
+  await apiClient.post('/files/process_folder/cancel', {
+    session_id: sessionId
+  });
 };
