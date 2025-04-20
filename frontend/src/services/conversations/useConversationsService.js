@@ -19,13 +19,14 @@ export const useConversationsService = (conversationId) => {
 
   const hasDispatchedNewConversation = useRef(false);
 
-  // Fallback: if the conversations array is empty, fetch them.
+  const hasFetched = useRef(false);
+
   useEffect(() => {
-    if (conversations.length === 0) {
-      console.log('Conversations array is empty. Fetching conversations...');
+    if (!hasFetched.current) {
       dispatch(fetchConversations());
+      hasFetched.current = true;
     }
-  }, [conversations, dispatch]);
+  }, [dispatch]);
 
   // Determine the effective conversationId.
   const effectiveConversationId =
