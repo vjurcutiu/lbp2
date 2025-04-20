@@ -20,7 +20,7 @@ def chat():
             additional_params=additional_params
         )
         return jsonify(result), 200
-    except Exception as e:
+    except Exception:
         current_app.logger.error('Error processing chat message', exc_info=True)
         return jsonify({'error': 'Internal server error'}), 500
 
@@ -79,7 +79,15 @@ def list_conversations():
     try:
         from db.models import Conversation  # lazy import if needed
         convos = Conversation.query.all()
-        conv_list = [c.to_dict() for c in convos]
+        conv_list = []
+        for c in convos:
+            conv_list.append({
+                'id': c.id,
+                'title': c.title,
+                'meta_data': c.meta_data,
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+                'updated_at': c.updated_at.isoformat() if c.updated_at else None,
+            })
         return jsonify({'conversations': conv_list}), 200
     except Exception:
         current_app.logger.error('Error fetching conversations', exc_info=True)
