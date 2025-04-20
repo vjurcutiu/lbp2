@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify, Response, current_app
 import uuid, json, threading, time, os
 from dotenv import load_dotenv
 
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import Session
 
 from db.models import File, db
@@ -28,14 +29,14 @@ class CancellationException(Exception):
 
 def cleanup_session(session_id):
     """
-    Remove any files added in this session from SQL and Pinecone.
-    Handles file IDs (int), file_paths (str), or dicts with 'id' keys.
+    Remove any files added in this session from SQL and Pinecone,
+    using a fresh session to avoid stale‐data flush conflicts.
     """
-    session = processing_sessions.get(session_id)
-    if not session:
+    proc_sess = processing_sessions.get(session_id)
+    if not proc_sess:
         return
 
-    items = session.get('file_items', [])
+    items = proc_sess.get('file_items', [])
     if not items:
         return
 
@@ -49,26 +50,40 @@ def cleanup_session(session_id):
         elif isinstance(x, str):
             paths.append(x)
 
-    # 2) If we only got paths, look up their IDs
-    if not ids and paths:
-        files = File.query.filter(File.file_path.in_(paths)).all()
-        ids = [f.id for f in files]
+    # 2) If we only got paths, look up their IDs in the cleanup session
+    SessionLocal = sessionmaker(bind=db.engine)
+    cleanup_sess = SessionLocal()
+    try:
+        if not ids and paths:
+            files = (
+                cleanup_sess.query(File)
+                .filter(File.file_path.in_(paths))
+                .all()
+            )
+            ids = [f.id for f in files]
 
-    # 3) Delete vectors in Pinecone using client
-    if ids:
-        try:
-            namespace = os.getenv("PINECONE_NAMESPACE")
-            PineconeClient.delete(ids=ids, namespace=namespace)
-        except Exception as e:
-            current_app.logger.error(f"[cleanup] Pinecone delete error for {session_id}: {e}")
+        # 3) Delete vectors in Pinecone
+        if ids:
+            try:
+                namespace = os.getenv("PINECONE_NAMESPACE", "default-namespace")
+                client = PineconeClient()
+                client.delete(ids=[str(i) for i in ids], namespace=namespace)
+            except Exception as e:
+                current_app.logger.error(f"[cleanup] Pinecone delete error for {session_id}: {e}")
 
-    # 4) Delete rows in SQL
-    if ids:
-        try:
-            File.query.filter(File.id.in_(ids)).delete(synchronize_session=False)
-            db.session.commit()
-        except Exception as e:
-            current_app.logger.error(f"[cleanup] DB delete error for {session_id}: {e}")
+        # 4) Delete rows from SQL in this fresh session
+        if ids:
+            cleanup_sess.query(File)\
+                .filter(File.id.in_(ids))\
+                .delete(synchronize_session=False)
+            cleanup_sess.commit()
+
+    except Exception as e:
+        current_app.logger.error(f"[cleanup] DB delete error for {session_id}: {e}")
+        cleanup_sess.rollback()
+    finally:
+        cleanup_sess.close()
+
 
 
 @file_bp.route('/process_folder', methods=['POST'])

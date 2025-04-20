@@ -7,7 +7,6 @@ def openai_api_logic(text, additional_params=None, purpose='chat'):
     based on the provided endpoint or parameters.
     """
     print("Entering openai_api_logic")
-    print(f"Received text: {text}")
     print(f"Received additional_params: {additional_params}")
     print(f"Purpose: {purpose}")
 
@@ -20,7 +19,6 @@ def openai_api_logic(text, additional_params=None, purpose='chat'):
     if additional_params:
         payload.update(additional_params)
 
-    print(f"Final payload after merging additional_params: {payload}")
 
     try:
         if purpose == 'chat':
@@ -130,7 +128,6 @@ def send_to_api(text, api_logic_func, additional_params=None, purpose='chat'):
     Interface layer that sends text to a chosen API using the provided api_logic_func.
     """
     print("Entering send_to_api")
-    print(f"Text to send: {text}")
     print(f"Additional params: {additional_params}")
     print(f"Purpose: {purpose}")
 

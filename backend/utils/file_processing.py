@@ -7,6 +7,18 @@ from flask import current_app
 import logging
 
 
+def truncate_words(text: str, limit: int = 20) -> str:
+    """
+    Return at most the first `limit` words of `text`,
+    joined by spaces, and append "..." if truncated.
+    """
+    words = text.split()
+    if len(words) <= limit:
+        return text
+    return " ".join(words[:limit]) + "..."
+
+
+
 def scan_and_add_files(path, extension, conversation_id=None, progress_callback=None):
     added_files = []
     skipped_files = []
@@ -81,6 +93,7 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
     }
 
 
+
 def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_callback=None):
     """
     A wrapper to allow scan_and_add_files to accept either a single file/folder path or a list of paths.
@@ -94,6 +107,7 @@ def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_
         return aggregated_results
     else:
         return scan_and_add_files(paths, extension, conversation_id, progress_callback)
+
 
 
 def extract_text_from_file(file_path):
@@ -137,6 +151,11 @@ def get_files_without_metadata_text():
     for f in files:
         if os.path.exists(f.file_path):
             contents = extract_text_from_file(f.file_path)
+            current_app.logger.debug(
+                "Loaded contents for %s: %s",
+                f.file_path,
+                truncate_words(contents, limit=20)
+            )
         else:
             contents = ""
             current_app.logger.warning(f"File not found: {f.file_path}")
@@ -168,7 +187,12 @@ def process_files_for_metadata(type='keywords', progress_callback=None):
                         f.meta_data[meta_key] = api_resp.content
                         results.append({'file_path': f.file_path, 'meta_data': api_resp.content})
                 except Exception as e:
-                    current_app.logger.error(f"Error processing metadata for {f.file_path}: {e}")
+                    current_app.logger.error(
+                        "Error processing metadata for %s: %s. Text snippet: %s",
+                        f.file_path,
+                        e,
+                        truncate_words(text, limit=20)
+                    )
         else:
             current_app.logger.warning(f"File not found: {f.file_path}")
         count += 1
@@ -186,12 +210,16 @@ def upsert_files_to_vector_db(progress_callback=None):
     """
     Upserts embeddings for files with metadata to Pinecone and marks them uploaded.
     """
+    # Query for files needing upsert
     to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
     current_app.logger.info(f"Files to upsert: {[f.file_path for f in to_upsert]}")
     results = []
     total = len(to_upsert)
     count = 0
     namespace = os.getenv('PINECONE_NAMESPACE')
+
+    # Instantiate Pinecone client once
+    client = PineconeClient()
 
     for f in to_upsert:
         if os.path.exists(f.file_path):
@@ -207,7 +235,7 @@ def upsert_files_to_vector_db(progress_callback=None):
                             'values': embeddings,
                             'metadata': {'source_text': text}
                         }
-                        vc_resp = PineconeClient.upsert([record], namespace=namespace)
+                        vc_resp = client.upsert(vectors=[record], namespace=namespace)
                         f.is_uploaded = True
                         results.append({'file_path': f.file_path, 'vector_response': vc_resp})
                     else:
