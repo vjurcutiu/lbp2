@@ -4,12 +4,10 @@ import re
 import json
 import spacy
 from openai import OpenAI
-# Fallback for OpenAIError import on clients without openai.error
 try:
     from openai.error import OpenAIError
 except ImportError:
     class OpenAIError(Exception):
-        """Fallback exception when openai.error cannot be imported."""
         pass
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -17,21 +15,95 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
 from rake_nltk import Rake
 import yake
-
-# Graph‑based & embedding‑based methods
 import pke
 from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
 from gensim import corpora, models
-
 from flashtext import KeywordProcessor
 from thefuzz import fuzz
 
-# Load Romanian tokenizer and lemmatizer
-nlp = spacy.load("ro_core_news_sm")
+# --- New imports for ontology integration ---
+import rdflib
+from owlready2 import get_ontology
 
-# Default model for keyword generation
+# Load Romanian NLP model
+nlp = spacy.load("ro_core_news_sm")
 DEFAULT_KEYWORD_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+
+# -----------------------------------------------------------------------------
+#                    Ontology & Taxonomy Integration
+# -----------------------------------------------------------------------------
+
+def load_rdf_ontology(path: str, format: str = "xml") -> rdflib.Graph:
+    """
+    Load an RDF/OWL ontology file into an rdflib.Graph.
+    Supported formats: xml, ttl, owl, rdf, json-ld
+    """
+    g = rdflib.Graph()
+    g.parse(path, format=format)
+    logging.getLogger("KeywordGenerator").info(f"Loaded RDF ontology from {path}")
+    return g
+
+
+def load_owl_ontology(path: str):
+    """
+    Load an OWL ontology using Owlready2.
+    Returns an Owlready2 ontology object.
+    """
+    onto = get_ontology(path).load()
+    logging.getLogger("KeywordGenerator").info(f"Loaded OWL ontology from {path}")
+    return onto
+
+
+def index_labels_from_rdf(graph: rdflib.Graph, lang: str = "ro") -> dict[str, rdflib.URIRef]:
+    """
+    Build a mapping from label (rdfs:label, skos:prefLabel, skos:altLabel) to URI.
+    Filters labels by language tag if present.
+    """
+    from rdflib.namespace import RDFS
+    SKOS = rdflib.Namespace("http://www.w3.org/2004/02/skos/core#")
+    label_predicates = [RDFS.label, SKOS.prefLabel, SKOS.altLabel]
+    label_map: dict[str, rdflib.URIRef] = {}
+    for subj, pred, obj in graph:
+        if pred in label_predicates and isinstance(obj, rdflib.Literal):
+            if obj.language and obj.language != lang:
+                continue
+            text = str(obj).lower()
+            label_map[text] = subj
+    logging.getLogger("KeywordGenerator").debug(f"Indexed {len(label_map)} labels from RDF graph")
+    return label_map
+
+
+def map_terms_to_ontology(
+    terms: list[str],
+    label_map: dict[str, rdflib.URIRef],
+    matcher: str = "exact",
+    fuzzy_threshold: int = 85
+) -> dict[str, str]:
+    """
+    Map extracted terms to ontology URIs using label_map.
+    matcher: 'exact' or 'fuzzy'.
+    Returns dict of term -> URI (string) or None if no match.
+    """
+    mapped: dict[str, str] = {}
+    for term in terms:
+        key = term.lower()
+        if matcher == "exact" and key in label_map:
+            mapped[term] = str(label_map[key])
+        elif matcher == "fuzzy":
+            # find best fuzzy match
+            best, score = None, 0
+            for label, uri in label_map.items():
+                s = fuzz.token_set_ratio(key, label)
+                if s > score:
+                    best, score = label, s
+            if score >= fuzzy_threshold:
+                mapped[term] = str(label_map[best])
+            else:
+                mapped[term] = None
+        else:
+            mapped[term] = None
+    return mapped
 
 @retry(
     retry=retry_if_exception_type(OpenAIError),
