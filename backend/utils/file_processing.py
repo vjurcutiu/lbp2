@@ -233,7 +233,9 @@ def upsert_files_to_vector_db(progress_callback=None):
                         record = {
                             'id': str(f.id),
                             'values': embeddings,
-                            'metadata': {'source_text': text}
+                            'metadata': {'source_text': text,
+                                         'keywords': f.meta_data.get('keywords', []) }
+                            
                         }
                         vc_resp = client.upsert(vectors=[record], namespace=namespace)
                         f.is_uploaded = True

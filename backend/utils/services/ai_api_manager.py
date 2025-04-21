@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Any, Dict, List, Optional, Union
+from utils.services.generators.keyword_generator import generate_keywords
 
 from openai import OpenAI
 
@@ -155,14 +156,8 @@ class OpenAIService:
         Generate keywords in Romanian for a legal document.
         Returns 'broken' if the input is too short.
         """
-        if not text.strip():
-            return "broken"
-        instruction = (
-            "Generate keywords in Romanian for this legal document. "
-            "If the document is empty or too short, return 'broken'."
-        )
         try:
-            return self._generic_completion(text, instruction, self.model_map["chat"]).strip()
+            return generate_keywords(text)
         except Exception as e:
             self.logger.error("Keyword extraction failed", exc_info=True)
             raise OpenAIAPIError("Keyword extraction failed") from e
