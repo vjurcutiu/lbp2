@@ -4,7 +4,7 @@ from flask import current_app
 from db.models import db, Conversation, ConversationMessage
 from utils.services.ai_api_manager import OpenAIService
 from utils.models.chat_payload import ChatPayload, OpenAIMessage
-from utils.search import search as default_search
+from utils.search import default_search
 from utils.websockets.sockets import socketio
 import pendulum
 from typing import Any, Dict, List, Optional, Union
@@ -68,19 +68,14 @@ class ConversationManager:
     def build_context(self, conversation: Conversation) -> List[dict]:
         history = []
         for msg in conversation.messages:
-            # map your internal sender to an OpenAI role
             if msg.sender == "ai":
                 role = "assistant"
             elif msg.sender == "user":
                 role = "user"
             else:
-                # if you ever have system or function messages you can handle them here
-                role = msg.sender  
+                role = msg.sender
 
-            history.append({
-                "role": role,
-                "content": msg.message
-            })
+            history.append({"role": role, "content": msg.message})
         return history
 
 
@@ -116,31 +111,29 @@ class MessageRepository:
 
 
 class AIOrchestrator:
-    def __init__(self, ai_service: OpenAIService, search_client):
+    def __init__(self, ai_service: OpenAIService, search_client=default_search):
         self.ai_service = ai_service
         self.search_client = search_client
 
-    def get_response(self, user_message: str, chat_history: List[dict], docs: list) -> str:
+    def get_response(self, user_message: str, chat_history: List[dict], docs: List[str]) -> str:
         """
         Build a ChatPayload from the existing chat_history plus the new user_message,
-        then call through to the OpenAIService.
+        then call through to the OpenAIService. Optionally include retrieved docs.
         """
-        # 1. Convert existing history into OpenAIMessage objects
         openai_msgs: List[OpenAIMessage] = [
             OpenAIMessage(role=entry["role"], content=entry["content"])
             for entry in chat_history
         ]
 
-        # 2. Append the new user message
+        # If we have docs, prepend them as system context
+        if docs:
+            system_content = "\n\n".join(docs)
+            openai_msgs.insert(0, OpenAIMessage(role="system", content=f"Relevant documents:\n{system_content}"))
+
         openai_msgs.append(OpenAIMessage(role="user", content=user_message))
 
-        # 3. Construct the payload (uses defaults from your ChatPayload model)
         payload = ChatPayload(messages=openai_msgs)
-
-        # 4. Call your service with the typed payload
-        response = self.ai_service.chat(payload)
-
-        return response
+        return self.ai_service.chat(payload)
 
 
 class SocketNotifier:
@@ -193,30 +186,21 @@ def handle_frontend_message(
     conversation = conv_mgr.get_or_create(conversation_id)
     new_convo = conv_mgr.is_new(conversation)
 
-    # 1. Store user message
     user_msg = msg_repo.add_user_message(conversation.id, text)
     session.commit()
 
-    # 2. Generate title if this is the first user message
     if new_convo:
         conv_mgr.generate_title(text, conversation)
-
-    # 3. Update summary only once there's already history
     if not new_convo:
         conv_mgr.update_summary(conversation, text, additional_params)
 
-    # 4. Build context and retrieve docs
     chat_history = conv_mgr.build_context(conversation)
-    search_args = additional_params if additional_params is not None else {
-        'index_name': 'test', 'namespace': 'default-namespace', 'top_k': 3
-    }
+    search_args = additional_params or {'index_name': 'test', 'namespace': 'default-namespace', 'top_k': 3}
     results = search_client(text, additional_params=search_args)
     docs = [m['text'] for m in results.get('results', [])]
 
-    # 5. Get AI response (now via ChatPayload)
     ai_reply = ai_orch.get_response(text, chat_history, docs)
 
-    # 6. Store AI message
     ai_msg = msg_repo.add_ai_message(conversation.id, ai_reply)
     session.commit()
 

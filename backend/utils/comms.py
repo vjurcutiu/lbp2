@@ -7,7 +7,7 @@ import logging
 
 import datetime
 import pendulum
-from utils.search import search
+from utils.search import default_search as search
 
 def conversation_to_dict(conversation):
     return {
