@@ -13,6 +13,10 @@ except ImportError:
         pass
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_selection import SelectKBest, chi2
+from rake_nltk import Rake
+import yake
 
 # Load Romanian tokenizer and lemmatizer
 # Ensure you've installed: pip install spacy ro-core-news-sm
@@ -76,38 +80,112 @@ def preprocess_text(text: str) -> str:
     tokens = [token.lemma_ for token in doc if not token.is_space]
     return " ".join(tokens)
 
+def extract_tfidf_keywords(text: str, top_k: int = 8, ngram_range=(1,3)) -> list[str]:
+    """
+    Use TF–IDF to score n-grams and pick the top_k highest-scoring phrases.
+    """
+    # Vectorize
+    vect = TfidfVectorizer(
+        ngram_range=ngram_range,
+        stop_words="romanian",
+        max_df=0.85,
+        min_df=2,
+    )
+    X = vect.fit_transform([text])
+    # chi2 needs at least two samples; we can simulate by duplicating the text and zeroing labels
+    X_dup = X.vstack([X])  # two identical samples
+    y = [1, 0]
+    # Select top features by chi2 score
+    skb = SelectKBest(chi2, k=min(top_k, X.shape[1]))
+    skb.fit(X_dup, y)
+    mask = skb.get_support()
+    candidates = [(feat, score) for feat, score in zip(vect.get_feature_names_out(), skb.scores_) if feat and mask[vect.vocabulary_.get(feat)]]
+    # sort by score
+    best = sorted(candidates, key=lambda x: -x[1])[:top_k]
+    return [phrase for phrase, score in best]
 
-def generate_keywords(text: str) -> str:
+
+def extract_rake_keywords(text: str, top_k: int = 8) -> list[str]:
     """
-    Generate keywords in Romanian for a legal document.
-    Returns 'broken' if the input is empty or too short.
-    Cleans up newline and whitespace in the output, and ensures valid JSON formatting as
-    {"keywords": [...] }.
+    Use RAKE (Rapid Automatic Keyword Extraction).
     """
-    logger = logging.getLogger("KeywordGenerator")
+    rake = Rake(language="romanian")  # uses default stopwords & punctuation
+    rake.extract_keywords_from_text(text)
+    ranked = rake.get_ranked_phrases()
+    return ranked[:top_k]
+
+
+def extract_yake_keywords(text: str, top_k: int = 8, ngram_max=3) -> list[str]:
+    """
+    Use YAKE (Yet Another Keyword Extractor).
+    """
+    kw_extractor = yake.KeywordExtractor(
+        lan="ro",
+        n=ngram_max,
+        top=top_k,
+        features=None
+    )
+    keywords = kw_extractor.extract_keywords(text)
+    # keywords is list of (phrase, score), lower score = more relevant
+    # so sort ascending
+    sorted_phrases = sorted(keywords, key=lambda x: x[1])
+    return [phrase for phrase, score in sorted_phrases]
+
+def generate_keywords(text: str, method: str = "openai") -> str:
+    """
+    Generate up to 8 keywords for a Romanian legal document.
+
+    Parameters:
+        text: raw document text
+        method: one of
+            - "openai": use GPT-based extraction (default)
+            - "tfidf":  TF–IDF + SelectKBest
+            - "rake":   RAKE (rake-nltk)
+            - "yake":   YAKE
+    Returns:
+        A JSON string of the form {"keywords": [...]}.
+    """
+    # 1. Clean and lemmatize
     cleaned = preprocess_text(text)
-    # Consider text too short if under 30 words
+
+    # 2. If too short, return empty list
     if len(cleaned.split()) < 30:
         return json.dumps({"keywords": []}, ensure_ascii=False)
 
-    instruction = (
-        "You are a keyword‑extraction assistant. Given a Romanian legal text, "
-        "return up to 8 keyphrases that best capture its topics as a JSON array of lowercase strings. "
-        "Prefer multi‑word nouns or noun phrases."
-    )
-    try:
+    # 3. Select extraction method
+    if method == "openai":
+        instruction = (
+            "You are a keyword‑extraction assistant. Given a Romanian legal text, "
+            "return up to 8 keyphrases that best capture its topics as a JSON array of lowercase strings. "
+            "Prefer multi‑word nouns or noun phrases."
+        )
         raw = _generic_completion(cleaned, instruction, DEFAULT_KEYWORD_MODEL).strip()
-        # Collapse internal whitespace and newlines
+        # Collapse newlines
         compact = re.sub(r"[\r\n]+", " ", raw)
-        # Try parsing JSON array
+        # Try to parse JSON array directly
         try:
             arr = json.loads(compact)
+            # If the top-level is an object, extract its "keywords" field
+            if isinstance(arr, dict) and "keywords" in arr:
+                arr = arr["keywords"]
         except json.JSONDecodeError:
-            # Fallback parsing for bullet lists
-            lines = re.split(r"[\r\n]+", compact)
-            arr = [ln.strip().lstrip("- ").strip() for ln in lines if ln.strip()]
-        # Wrap into object
-        return json.dumps({"keywords": arr}, ensure_ascii=False)
-    except Exception as e:
-        logger.error("Keyword extraction failed", exc_info=True)
-        raise e
+            # Fallback: split on bullets or lines
+            lines = re.split(r"[\r\n]+", raw)
+            arr = [ln.strip().lstrip("-•  ").strip() for ln in lines if ln.strip()]
+        keywords = arr[:8]
+
+    elif method == "tfidf":
+        keywords = extract_tfidf_keywords(cleaned, top_k=8, ngram_range=(1,3))
+
+    elif method == "rake":
+        keywords = extract_rake_keywords(cleaned, top_k=8)
+
+    elif method == "yake":
+        keywords = extract_yake_keywords(cleaned, top_k=8, ngram_max=3)
+
+    else:
+        raise ValueError(f"Unknown extraction method: {method!r}")
+
+    # 4. Wrap and output
+    return json.dumps({"keywords": keywords}, ensure_ascii=False)
+
