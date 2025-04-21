@@ -1,12 +1,13 @@
 import logging
+import os
 from flask import current_app
 from db.models import db, Conversation, ConversationMessage
 from utils.services.ai_api_manager import OpenAIService
+from utils.models.chat_payload import ChatPayload, OpenAIMessage
 from utils.search import search as default_search
 from utils.websockets.sockets import socketio
 import pendulum
 from typing import Any, Dict, List, Optional, Union
-
 
 
 class ConversationManager:
@@ -120,8 +121,26 @@ class AIOrchestrator:
         self.search_client = search_client
 
     def get_response(self, user_message: str, chat_history: List[dict], docs: list) -> str:
-        # Optionally you could interleave retrieved docs as system messages here
-        return self.ai_service.chat(chat_history, user_message)
+        """
+        Build a ChatPayload from the existing chat_history plus the new user_message,
+        then call through to the OpenAIService.
+        """
+        # 1. Convert existing history into OpenAIMessage objects
+        openai_msgs: List[OpenAIMessage] = [
+            OpenAIMessage(role=entry["role"], content=entry["content"])
+            for entry in chat_history
+        ]
+
+        # 2. Append the new user message
+        openai_msgs.append(OpenAIMessage(role="user", content=user_message))
+
+        # 3. Construct the payload (uses defaults from your ChatPayload model)
+        payload = ChatPayload(messages=openai_msgs)
+
+        # 4. Call your service with the typed payload
+        response = self.ai_service.chat(payload)
+
+        return response
 
 
 class SocketNotifier:
@@ -194,7 +213,7 @@ def handle_frontend_message(
     results = search_client(text, additional_params=search_args)
     docs = [m['text'] for m in results.get('results', [])]
 
-    # 5. Get AI response
+    # 5. Get AI response (now via ChatPayload)
     ai_reply = ai_orch.get_response(text, chat_history, docs)
 
     # 6. Store AI message

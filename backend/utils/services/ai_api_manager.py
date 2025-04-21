@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Any, Dict, List, Optional, Union
+
 from openai import OpenAI
 
 # Fallback for OpenAIError import on clients lacking openai.error module
@@ -13,6 +14,8 @@ except ImportError:
 
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from utils.models.chat_payload import ChatPayload
+
 
 class OpenAIAPIError(Exception):
     """Custom exception to wrap OpenAI API errors."""
@@ -21,7 +24,8 @@ class OpenAIAPIError(Exception):
 
 class OpenAIService:
     """
-    Service wrapper around the OpenAI client, with retry, logging, and purpose-specific helpers.
+    Service wrapper around the OpenAI client, with retry, logging, and
+    a unified chat endpoint that consumes our ChatPayload model.
     """
 
     def __init__(
@@ -50,7 +54,8 @@ class OpenAIService:
         stream: bool = False
     ) -> Union[str, Any]:
         """
-        Internal method for chat-style completions, with optional streaming.
+        Legacy helper: wraps chat by embedding prompt into a single user message.
+        Keeps backward compatibility for any code still calling _chat_completion.
         """
         self.logger.debug("Chat request [model=%s, stream=%s]", self.model_map["chat"], stream)
         messages = [
@@ -96,7 +101,7 @@ class OpenAIService:
         model: str
     ) -> str:
         """
-        Generic single-turn completion for various purposes (summary, keywords, title).
+        Generic single-turn completion for summary, title, keywords, etc.
         """
         self.logger.debug("Generic completion [model=%s]", model)
         messages = [
@@ -109,33 +114,28 @@ class OpenAIService:
         )
         return response.choices[0].message.content
 
-
-    def chat(
-        self,
-        chat_history: List[dict],
-        prompt: str,
-        stream: bool = False
-    ) -> str:
+    def chat(self, payload: ChatPayload) -> Union[str, Any]:
         """
-        Send the full chat history plus the new user prompt.
+        Unified chat entrypoint: consumes a ChatPayload, passes all its
+        parameters directly to the OpenAI API, and returns text or stream.
         """
-        system_instruction = (
-            "You are a helpful assistant. The context is the full prior conversation."
+        self.logger.debug(
+            "ChatPayload request [model=%s, stream=%s, temperature=%s, top_p=%s]",
+            payload.model, payload.stream, payload.temperature, payload.top_p
         )
-        # Prepend system, then the entire history, then the new user message
-        messages = [{"role": "system", "content": system_instruction}]
-        messages.extend(chat_history)
-        messages.append({"role": "user", "content": prompt})
 
-        response = self.client.chat.completions.create(
-            model=self.model_map["chat"],
-            messages=messages,
-            stream=stream
-        )
-        if stream:
+        # pydantic .dict() will drop None fields (exclude_none = True in Config)
+        params = payload.dict()
+
+        # Ensure we use our env-default model if none specified
+        params.setdefault("model", self.model_map["chat"])
+
+        # Call OpenAI
+        response = self.client.chat.completions.create(**params)
+
+        if payload.stream:
             return response
         return response.choices[0].message.content
-
 
     def summarize(self, text: str) -> str:
         """
