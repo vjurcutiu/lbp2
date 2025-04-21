@@ -24,6 +24,9 @@ from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
 from gensim import corpora, models
 
+from flashtext import KeywordProcessor
+from thefuzz import fuzz
+
 # Load Romanian tokenizer and lemmatizer
 nlp = spacy.load("ro_core_news_sm")
 
@@ -166,15 +169,58 @@ def extract_gensim_word2vec_keywords(text: str, top_k: int = 8,
     similar = model.wv.similar_by_vector(centroid, topn=top_k)
     return [word for word, _ in similar]
 
+def extract_flashtext_keywords(text: str,
+                               vocabulary: list[str],
+                               case_sensitive: bool = False) -> list[str]:
+    """
+    Use FlashText's KeywordProcessor for O(n) keyword lookup.
+    Returns all vocabulary items found in text (deduped by default, order = appearance).
+    """
+    kp = KeywordProcessor(case_sensitive=case_sensitive)
+    # you can also pass a dict mapping synonyms → normalized form
+    for term in vocabulary:
+        kp.add_keyword(term)
+    found = kp.extract_keywords(text)
+    # FlashText returns duplicates if terms repeat; dedupe while preserving order:
+    seen = set()
+    uniq = []
+    for kw in found:
+        if kw not in seen:
+            seen.add(kw)
+            uniq.append(kw)
+    return uniq
 
-def generate_keywords(text: str, method: str = "openai") -> str:
+def dedupe_keywords_fuzzy(keywords: list[str],
+                          threshold: int = 85,
+                          scorer=fuzz.token_set_ratio) -> list[str]:
+    """
+    Remove near‑duplicates from a list by fuzzy similarity.
+    Keeps the first occurrence of each cluster whose similarity ≥ threshold.
+    """
+    deduped = []
+    for kw in keywords:
+        if not any(scorer(kw, existing) >= threshold for existing in deduped):
+            deduped.append(kw)
+    return deduped
+
+
+def generate_keywords(
+    text: str,
+    method: str = "openai",
+    flash_vocab: list[str] | None = None,
+    fuzzy_threshold: int = 85,
+) -> str:
     """
     Generate up to 8 keywords for a Romanian legal document.
 
-    method: one of
+    New methods:
+      - "flashtext"    : FlashText lookup against flash_vocab
+      - "flash_fuzzy"  : FlashText lookup + fuzzy deduplication (threshold=fuzzy_threshold)
+
+    Existing methods unchanged:
       - "openai"      : GPT-based extraction (default)
       - "tfidf", "rake", "yake"
-      - "pke"         : Graph-based via pke (default uses TextRank)
+      - "pke"         : Graph-based via pke (TextRank)
       - "keybert"     : Embedding-based via KeyBERT
       - "lda"         : Topic modeling via Gensim LDA
       - "word2vec"    : Embedding-based via Gensim Word2Vec
@@ -183,11 +229,25 @@ def generate_keywords(text: str, method: str = "openai") -> str:
     if len(cleaned.split()) < 30:
         return json.dumps({"keywords": []}, ensure_ascii=False)
 
-    if method == "openai":
+    # FlashText-only
+    if method == "flashtext":
+        if not flash_vocab:
+            raise ValueError("flash_vocab must be provided for flashtext method")
+        keywords = extract_flashtext_keywords(cleaned, flash_vocab)
+
+    # FlashText + fuzzy dedupe
+    elif method == "flash_fuzzy":
+        if not flash_vocab:
+            raise ValueError("flash_vocab must be provided for flash_fuzzy method")
+        found = extract_flashtext_keywords(cleaned, flash_vocab)
+        keywords = dedupe_keywords_fuzzy(found, threshold=fuzzy_threshold)
+
+    # GPT-based extraction
+    elif method == "openai":
         instruction = (
             "You are a keyword‑extraction assistant. Given a Romanian legal text, "
-            "return up to 8 keyphrases that best capture its topics as a JSON array of lowercase strings. "
-            "Prefer multi‑word nouns or noun phrases."
+            "return up to 8 keyphrases that best capture its topics as a JSON array "
+            "of lowercase strings. Prefer multi‑word nouns or noun phrases."
         )
         raw = _generic_completion(cleaned, instruction, DEFAULT_KEYWORD_MODEL).strip()
         compact = re.sub(r"[\r\n]+", " ", raw)
@@ -199,22 +259,34 @@ def generate_keywords(text: str, method: str = "openai") -> str:
             lines = re.split(r"[\r\n]+", raw)
             arr = [ln.strip().lstrip("-•  ").strip() for ln in lines if ln.strip()]
         keywords = arr[:8]
+
+    # TF‑IDF, RAKE, YAKE
     elif method in ("tfidf", "rake", "yake"):
         extractor = {
             "tfidf": extract_tfidf_keywords,
-            "rake": extract_rake_keywords,
-            "yake": extract_yake_keywords
+            "rake":  extract_rake_keywords,
+            "yake":  extract_yake_keywords,
         }[method]
         keywords = extractor(cleaned)
+
+    # Graph‑based (TextRank, etc.)
     elif method == "pke":
         keywords = extract_pke_keywords(cleaned)
+
+    # Embedding‑based KeyBERT
     elif method == "keybert":
         keywords = extract_keybert_keywords(cleaned)
+
+    # Topic modeling via LDA
     elif method == "lda":
         keywords = extract_gensim_lda_keywords(cleaned)
+
+    # Embedding‑based Word2Vec centroid
     elif method == "word2vec":
         keywords = extract_gensim_word2vec_keywords(cleaned)
+
     else:
         raise ValueError(f"Unknown extraction method: {method!r}")
 
     return json.dumps({"keywords": keywords}, ensure_ascii=False)
+
