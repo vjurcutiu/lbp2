@@ -112,18 +112,30 @@ class OpenAIService:
 
     def chat(
         self,
-        context: str,
+        chat_history: List[dict],
         prompt: str,
         stream: bool = False
     ) -> str:
         """
-        Public method for obtaining a chat response.
+        Send the full chat history plus the new user prompt.
         """
-        try:
-            return self._chat_completion(context, prompt, stream=stream)
-        except Exception as e:
-            self.logger.error("Chat completion failed", exc_info=True)
-            raise OpenAIAPIError("Chat completion failed") from e
+        system_instruction = (
+            "You are a helpful assistant. The context is the full prior conversation."
+        )
+        # Prepend system, then the entire history, then the new user message
+        messages = [{"role": "system", "content": system_instruction}]
+        messages.extend(chat_history)
+        messages.append({"role": "user", "content": prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model_map["chat"],
+            messages=messages,
+            stream=stream
+        )
+        if stream:
+            return response
+        return response.choices[0].message.content
+
 
     def summarize(self, text: str) -> str:
         """

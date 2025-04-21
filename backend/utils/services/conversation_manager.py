@@ -5,6 +5,8 @@ from utils.services.ai_api_manager import OpenAIService
 from utils.search import search as default_search
 from utils.websockets.sockets import socketio
 import pendulum
+from typing import Any, Dict, List, Optional, Union
+
 
 
 class ConversationManager:
@@ -62,18 +64,23 @@ class ConversationManager:
             logging.error("Error updating conversation summary", exc_info=True)
             return conversation.meta_data.get("summary", "")
 
-    def build_context(self, conversation: Conversation) -> str:
-        if conversation.meta_data and conversation.meta_data.get("summary"):
-            return conversation.meta_data.get("summary")
-        lines = []
+    def build_context(self, conversation: Conversation) -> List[dict]:
+        history = []
         for msg in conversation.messages:
-            if getattr(msg, 'created_at', None):
-                ts = pendulum.instance(msg.created_at).to_iso8601_string()
-                prefix = f"[{ts}] "
+            # map your internal sender to an OpenAI role
+            if msg.sender == "ai":
+                role = "assistant"
+            elif msg.sender == "user":
+                role = "user"
             else:
-                prefix = ""
-            lines.append(f"{prefix}{msg.sender.capitalize()}: {msg.message}")
-        return "\n".join(lines)
+                # if you ever have system or function messages you can handle them here
+                role = msg.sender  
+
+            history.append({
+                "role": role,
+                "content": msg.message
+            })
+        return history
 
 
 class MessageRepository:
@@ -112,9 +119,9 @@ class AIOrchestrator:
         self.ai_service = ai_service
         self.search_client = search_client
 
-    def get_response(self, user_message: str, context: str, docs: list) -> str:
-        # Orchestrate a chat response using AI service
-        return self.ai_service.chat(context, user_message)
+    def get_response(self, user_message: str, chat_history: List[dict], docs: list) -> str:
+        # Optionally you could interleave retrieved docs as system messages here
+        return self.ai_service.chat(chat_history, user_message)
 
 
 class SocketNotifier:
@@ -180,7 +187,7 @@ def handle_frontend_message(
         conv_mgr.update_summary(conversation, text, additional_params)
 
     # 4. Build context and retrieve docs
-    context = conv_mgr.build_context(conversation)
+    chat_history = conv_mgr.build_context(conversation)
     search_args = additional_params if additional_params is not None else {
         'index_name': 'test', 'namespace': 'default-namespace', 'top_k': 3
     }
@@ -188,7 +195,7 @@ def handle_frontend_message(
     docs = [m['text'] for m in results.get('results', [])]
 
     # 5. Get AI response
-    ai_reply = ai_orch.get_response(text, context, docs)
+    ai_reply = ai_orch.get_response(text, chat_history, docs)
 
     # 6. Store AI message
     ai_msg = msg_repo.add_ai_message(conversation.id, ai_reply)
