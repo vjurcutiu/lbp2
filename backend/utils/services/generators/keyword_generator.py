@@ -317,9 +317,33 @@ def generate_keywords(
     # GPT-based extraction
     elif method == "openai":
         instruction = (
-            "You are a keyword‑extraction assistant. Given a Romanian legal text, "
-            "return up to 8 keyphrases that best capture its topics as a JSON array "
-            "of lowercase strings. Prefer multi‑word nouns or noun phrases."
+            """SYSTEM:
+            You are a highly accurate AI assistant specialized in extracting keywords from Romanian legal documents.
+
+            USER:
+            Mai jos ai textul unei hotărâri judecătorești în limba română. Din acest text, generează întotdeauna, în această ordine, un obiect JSON valid cu următoarele câmpuri:
+
+            - Locatie (string)  
+            - Data (string, format "ZZ.MM.AAAA")  
+            - Domeniu (string)  
+            - Hotarare (string)  
+            - cuvinte_cheie (listă de 8 string‑uri)
+
+            Exemplu de schemă de răspuns:
+
+            ```json
+            {
+            "locatie": "…, instanța …",
+            "data": "ZZ.MM.AAAA",
+            "domeniu": "drept penal",
+            "hotarare": "condamnare/acord de recunoaștere etc.",
+            "cuvinte_cheie": [
+                "primul cuvânt",
+                "al doilea cuvânt",
+                "…",
+                "al optulea cuvânt"
+            ]
+            }"""
         )
         raw = _generic_completion(cleaned, instruction, DEFAULT_KEYWORD_MODEL).strip()
         compact = re.sub(r"[\r\n]+", " ", raw)
