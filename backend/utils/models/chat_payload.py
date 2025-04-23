@@ -9,7 +9,7 @@ class OpenAIMessage(BaseModel):
     name: Optional[str] = None  # for function calls
 
 class ChatPayload(BaseModel):
-    model: str = Field(default_factory=lambda: os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"))
+    model: str = Field(default_factory=lambda: os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"))
     messages: List[OpenAIMessage]
     stream: bool = False
     temperature: float = 0.0

@@ -27,7 +27,7 @@ def openai_api_logic(text, additional_params=None, purpose='chat'):
                 print("Warning: No 'context' found in payload. This may lead to an error.")
             
             completion = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -52,7 +52,7 @@ def openai_api_logic(text, additional_params=None, purpose='chat'):
 
         elif purpose == 'keywords':
             completion = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -73,7 +73,7 @@ def openai_api_logic(text, additional_params=None, purpose='chat'):
 
         elif purpose == 'summary':
             completion = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -98,7 +98,7 @@ def openai_api_logic(text, additional_params=None, purpose='chat'):
 
         elif purpose == 'convo-name':
             completion = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",

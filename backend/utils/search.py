@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Optional, Dict, Any, List
+import json
 
 from utils.ai_apis import send_to_api, openai_api_logic
 from utils.pinecone_client import PineconeClient
@@ -29,6 +30,53 @@ class Embedder:
             logging.error("Embedder.embed failed: %s", e, exc_info=True)
             raise
 
+class KeywordSearch:
+    """
+    Performs exact keyword matching over items whose metadata['keywords'] is a JSON string:
+      {"keywords": ["term1", "term2", ...]}
+    """
+
+    def __init__(self, items: List[Dict[str, Any]]):
+        """
+        items: list of dicts, each having at least:
+          - 'id'
+          - 'metadata': containing a JSON-string under metadata['keywords']
+          - other fields you want to return (e.g. 'file_path', 'text', etc.)
+        """
+        self.items = items
+
+    def search(
+        self, 
+        term: str, 
+        case_insensitive: bool = True, 
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Return items whose keywords list contains the exact term.
+        If case_insensitive=True, matching is done in lowercase.
+        limit: max number of results to return (None means no limit).
+        """
+        matches = []
+        t = term.lower() if case_insensitive else term
+
+        for item in self.items:
+            raw = item.get("metadata", {}).get("keywords", "")
+            try:
+                data = json.loads(raw)
+                kws = data.get("keywords", [])
+            except json.JSONDecodeError:
+                continue
+
+            # Normalize
+            norm_kws = [k.lower() for k in kws] if case_insensitive else kws
+
+            if t in norm_kws:
+                matches.append(item)
+
+        # Optionally limit and return
+        if limit:
+            return matches[:limit]
+        return matches
 
 class VectorSearch:
     """

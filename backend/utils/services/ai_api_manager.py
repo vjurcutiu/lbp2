@@ -38,7 +38,7 @@ class OpenAIService:
         self.client = client or OpenAI()
         # Configure default models, overridable via environment variables
         self.model_map = model_map or {
-            "chat": os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            "chat": os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             "embeddings": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-ada-002"),
         }
         self.logger = logging.getLogger(self.__class__.__name__)

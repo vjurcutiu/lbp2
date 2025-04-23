@@ -28,7 +28,7 @@ from owlready2 import get_ontology
 
 # Load Romanian NLP model
 nlp = spacy.load("ro_core_news_sm")
-DEFAULT_KEYWORD_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+DEFAULT_KEYWORD_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
 
 # -----------------------------------------------------------------------------
 #                    Ontology & Taxonomy Integration

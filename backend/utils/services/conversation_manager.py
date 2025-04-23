@@ -8,6 +8,36 @@ from utils.search import default_search
 from utils.websockets.sockets import socketio
 import pendulum
 from typing import Any, Dict, List, Optional, Union
+from utils.services.agentic.search_router import SearchRouter
+
+def load_file_records():
+    """
+    Pull all uploaded files from the DB, read their text, and return
+    a list of dicts suitable for SearchRouter.
+    """
+    records = []
+    files = File.query.filter_by(is_uploaded=True).all()
+    for f in files:
+        try:
+            text = open(f.file_path, encoding="utf-8").read()
+        except Exception as e:
+            logging.warning("Failed to read file %s: %s", f.file_path, e)
+            continue
+
+        records.append({
+            "id": f.id,
+            "file_path": f.file_path,
+            "metadata": f.meta_data or {},
+            "text": text,
+        })
+    return records
+
+file_records = load_file_records()
+search_router = SearchRouter(
+    items_for_keyword=file_records,
+    pinecone_namespace=os.getenv("PINECONE_NAMESPACE", "default-namespace")
+)
+
 
 
 class ConversationManager:
@@ -173,41 +203,59 @@ def handle_frontend_message(
     additional_params: dict = None,
     session=default_db.session,
     ai_service: OpenAIService = None,
-    search_client=default_search,
+    search_client=search_router.search,
     notifier=None
 ) -> dict:
+    # Initialize services
     ai_service = ai_service or OpenAIService()
     notifier = notifier or SocketNotifier(socketio, current_app)
 
+    # Build our conversation stack
     conv_mgr = ConversationManager(session, ai_service, notifier)
     msg_repo = MessageRepository(session)
     ai_orch = AIOrchestrator(ai_service, search_client)
 
+    # Fetch or create the conversation
     conversation = conv_mgr.get_or_create(conversation_id)
-    new_convo = conv_mgr.is_new(conversation)
+    is_new = conv_mgr.is_new(conversation)
 
+    # Persist the user’s message
     user_msg = msg_repo.add_user_message(conversation.id, text)
     session.commit()
 
-    if new_convo:
+    # If it’s brand new, generate a title; otherwise update the summary
+    if is_new:
         conv_mgr.generate_title(text, conversation)
-    if not new_convo:
+    else:
         conv_mgr.update_summary(conversation, text, additional_params)
 
+    # Build chat history for the LLM
     chat_history = conv_mgr.build_context(conversation)
-    search_args = additional_params or {'index_name': 'test', 'namespace': 'default-namespace', 'top_k': 3}
-    results = search_client(text, additional_params=search_args)
-    docs = [m['text'] for m in results.get('results', [])]
 
+    # Run routed search
+    params = additional_params or {}
+    results = search_client(
+        text,
+        top_k=params.get("top_k", 3),
+        threshold=params.get("threshold", 0.7),
+        limit=params.get("limit", 3),
+    )
+    docs = [m["text"] for m in results.get("results", [])]
+    logging.debug("SearchRouter chose %s mode, returned %d docs",
+                  results.get("mode"), len(docs))
+
+    # Ask the AI for a reply
     ai_reply = ai_orch.get_response(text, chat_history, docs)
 
+    # Persist the AI’s response
     ai_msg = msg_repo.add_ai_message(conversation.id, ai_reply)
     session.commit()
 
+    # Return payload back to frontend
     return {
-        'conversation_id': conversation.id,
-        'conversation_title': conversation.title,
-        'user_message': text,
-        'ai_response': ai_reply,
-        'new_conversation_id': conversation.id if new_convo else None
+        "conversation_id": conversation.id,
+        "conversation_title": conversation.title,
+        "user_message": text,
+        "ai_response": ai_reply,
+        "new_conversation_id": conversation.id if is_new else None
     }
