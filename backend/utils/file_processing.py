@@ -1,11 +1,15 @@
 import os
 from db.models import db, File
-from utils.ai_apis import send_to_api, openai_api_logic  # You can swap out openai_api_logic with another API function as needed
 from utils.pinecone_client import PineconeClient
 from sqlalchemy import or_
 from flask import current_app
 import logging
 
+# Use the new AI API manager wrapper
+from utils.services.ai_api_manager import OpenAIService
+
+# Instantiate service once for reuse
+aii = OpenAIService()
 
 def truncate_words(text: str, limit: int = 20) -> str:
     """
@@ -16,7 +20,6 @@ def truncate_words(text: str, limit: int = 20) -> str:
     if len(words) <= limit:
         return text
     return " ".join(words[:limit]) + "..."
-
 
 
 def scan_and_add_files(path, extension, conversation_id=None, progress_callback=None):
@@ -93,7 +96,6 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
     }
 
 
-
 def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_callback=None):
     """
     A wrapper to allow scan_and_add_files to accept either a single file/folder path or a list of paths.
@@ -107,7 +109,6 @@ def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_
         return aggregated_results
     else:
         return scan_and_add_files(paths, extension, conversation_id, progress_callback)
-
 
 
 def extract_text_from_file(file_path):
@@ -181,11 +182,20 @@ def process_files_for_metadata(type='keywords', progress_callback=None):
             text = extract_text_from_file(f.file_path)
             if text:
                 try:
-                    api_resp = send_to_api(text, openai_api_logic, purpose=type)
-                    if api_resp:
-                        f.meta_data = f.meta_data or {}
-                        f.meta_data[meta_key] = api_resp.content
-                        results.append({'file_path': f.file_path, 'meta_data': api_resp.content})
+                    # Use manager wrapper for metadata
+                    if type == 'keywords':
+                        api_content = aii.keywords(text)
+                    else:
+                        # fallback to generic chat
+                        api_content = aii.chat({
+                            'messages': [
+                                {'role': 'system', 'content': f'Generate {type} for this document.'},
+                                {'role': 'user', 'content': text}
+                            ]
+                        })
+                    f.meta_data = f.meta_data or {}
+                    f.meta_data[meta_key] = api_content
+                    results.append({'file_path': f.file_path, 'meta_data': api_content})
                 except Exception as e:
                     current_app.logger.error(
                         "Error processing metadata for %s: %s. Text snippet: %s",
@@ -210,7 +220,6 @@ def upsert_files_to_vector_db(progress_callback=None):
     """
     Upserts embeddings for files with metadata to Pinecone and marks them uploaded.
     """
-    # Query for files needing upsert
     to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
     current_app.logger.info(f"Files to upsert: {[f.file_path for f in to_upsert]}")
     results = []
@@ -218,7 +227,6 @@ def upsert_files_to_vector_db(progress_callback=None):
     count = 0
     namespace = os.getenv('PINECONE_NAMESPACE')
 
-    # Instantiate Pinecone client once
     client = PineconeClient()
 
     for f in to_upsert:
@@ -227,15 +235,14 @@ def upsert_files_to_vector_db(progress_callback=None):
             if text:
                 retrieval = f"Represent this document for searching relevant passages: {text}"
                 try:
-                    api_resp = send_to_api(retrieval, openai_api_logic, purpose='embeddings')
-                    embeddings = api_resp.values if hasattr(api_resp, 'values') else api_resp
+                    # Use manager for embeddings
+                    embeddings = aii.embeddings(retrieval)
                     if embeddings:
                         record = {
                             'id': str(f.id),
                             'values': embeddings,
                             'metadata': {'source_text': text,
-                                         'keywords': f.meta_data.get('keywords', []) }
-                            
+                                         'keywords': f.meta_data.get('keywords', [])}
                         }
                         vc_resp = client.upsert(vectors=[record], namespace=namespace)
                         f.is_uploaded = True
