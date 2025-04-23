@@ -1,7 +1,7 @@
 import logging
 import os
 from flask import current_app
-from db.models import db, Conversation, ConversationMessage
+from db.models import db, Conversation, ConversationMessage, File
 from utils.services.ai_api_manager import OpenAIService
 from utils.models.chat_payload import ChatPayload, OpenAIMessage
 from utils.search import default_search
@@ -9,6 +9,7 @@ from utils.websockets.sockets import socketio
 import pendulum
 from typing import Any, Dict, List, Optional, Union
 from utils.services.agentic.search_router import SearchRouter
+import json
 
 def load_file_records():
     """
@@ -32,10 +33,22 @@ def load_file_records():
         })
     return records
 
-file_records = load_file_records()
-search_router = SearchRouter(
-    items_for_keyword=file_records,
-    pinecone_namespace=os.getenv("PINECONE_NAMESPACE", "default-namespace")
+
+def build_keyword_index():
+    items = []
+    for f in File.query.filter_by(is_uploaded=True).all():
+        kws = f.meta_data.get("keywords", [])
+        items.append({
+            "id": f.id,
+            "metadata": {"keywords": json.dumps({"keywords": kws})},
+            # omit "text" and "file_path" entirely
+        })
+    return items
+
+keyword_items = build_keyword_index()
+router = SearchRouter(
+    items_for_keyword=keyword_items,
+    pinecone_namespace="default-namespace"
 )
 
 
