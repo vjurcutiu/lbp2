@@ -1,10 +1,11 @@
 import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from utils.search import KeywordSearch, VectorSearch, Embedder
 from utils.services.ai_api_manager import OpenAIService
 
-from query_processor import (
+from utils.services.agentic.query_processor import (
     identify_intent,
     extract_keyword,
     process_keyword_results,
@@ -43,32 +44,40 @@ class SearchRouter:
         3. If 'semantic', run vector search.
         4. If 'conversational', return a placeholder for chat handling.
         """
-        self.logger.info("Received query: '%s'", query)
+        self.logger.info("search_router.search: received query=%r top_k=%d threshold=%s limit=%d",
+                         query, top_k, threshold, limit)
 
         intent = identify_intent(query, self.keyword_topics, self.ai)
-        self.logger.info("Identified intent: %s", intent)
+        self.logger.info("search_router.search: intent=%s", intent)
 
         if intent == "keyword":
             topic = extract_keyword(query, self.keyword_topics)
+            self.logger.debug("search_router.search: extract_keyword returned %s", topic)
             if topic is None:
-                self.logger.warning("Extracted no keyword topic; defaulting to semantic")
+                self.logger.warning("search_router.search: no topic extracted, switching to semantic")
                 intent = "semantic"
             else:
-                self.logger.info("Keyword topic: %s", topic)
+                self.logger.info("search_router.search: keyword topic=%s", topic)
                 raw_hits = self.keyword_search.search(
                     topic, case_insensitive=True, limit=limit
                 )
+                self.logger.debug("search_router.search: raw keyword hits count=%d", len(raw_hits))
                 results = process_keyword_results(raw_hits)
+                self.logger.debug("search_router.search: processed keyword results count=%d", len(results))
                 return {"intent": "keyword", "topic": topic, "results": results}
 
         if intent == "semantic":
+            self.logger.info("search_router.search: routing to semantic search")
             sem = self.semantic_search.search(
                 query, top_k=top_k, namespace=self.namespace, threshold=threshold
             )
+            self.logger.debug("search_router.search: semantic output keys=%s", list(sem.keys()))
             results = process_semantic_results(sem)
+            self.logger.debug("search_router.search: processed semantic results count=%d", len(results))
             return {"intent": "semantic", "results": results}
 
         # conversational
+        self.logger.info("search_router.search: routing to conversational handler")
         return {"intent": "conversational", "response": None}
 
 # Example usage

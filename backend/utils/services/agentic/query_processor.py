@@ -21,7 +21,7 @@ def identify_intent(
     lower = query.lower()
     for topic in keyword_topics:
         if topic.lower() in lower:
-            logger.debug("Intent identified as keyword by topic match: %s", topic)
+            logger.debug("identify_intent: matched keyword topic='%s'", topic)
             return "keyword"
 
     # Fallback: ask LLM to choose between semantic vs. conversational
@@ -31,6 +31,8 @@ def identify_intent(
         "(they want a chat-style response)."
     )
     prompt = f'Query: "{query}"'
+    logger.debug("identify_intent: no topic match, falling back to LLM (%s)", 
+                 "custom system" if system_instruction else "default system")
     try:
         payload = ChatPayload(
             model=openai_service.model_map['chat'],
@@ -43,12 +45,13 @@ def identify_intent(
             top_p=1.0,
         )
         response = openai_service.chat(payload).strip().lower()
+        logger.debug("identify_intent: LLM response='%s'", response)
         if response in {"semantic", "conversational"}:
             return response
-        logger.warning("LLM returned unexpected intent '%s', defaulting to semantic", response)
+        logger.warning("identify_intent: unexpected LLM intent='%s', defaulting to 'semantic'", response)
         return "semantic"
     except OpenAIAPIError as e:
-        logger.error("Intent LLM call failed, defaulting to semantic", exc_info=e)
+        logger.error("identify_intent: LLM call failed, defaulting to 'semantic'", exc_info=e)
         return "semantic"
 
 
@@ -80,6 +83,7 @@ def decide_mode(
         "either 'keyword' or 'semantic'—to pick the best search strategy."
     )
     prompt = f'Query: "{query}"'
+    logger.debug("decide_mode: querying LLM for best search strategy")
     try:
         payload = ChatPayload(
             model=openai_service.model_map['chat'],
@@ -93,15 +97,14 @@ def decide_mode(
         )
         response = openai_service.chat(payload)
         mode = response.strip().lower()
+        logger.debug("decide_mode: LLM suggested mode='%s'", mode)
     except OpenAIAPIError as e:
-        logger.error("LLM decision failed, falling back to semantic", exc_info=e)
+        logger.error("decide_mode: LLM error, falling back to 'semantic'", exc_info=e)
         return "semantic"
 
-    logger.debug("[query_processor] LLM decided mode: %s", mode)
+    logger.debug("decide_mode: final mode='%s'", mode)
     if mode not in {"keyword", "semantic"}:
-        logger.warning(
-            "LLM returned unexpected mode '%s', defaulting to semantic", mode
-        )
+        logger.warning("decide_mode: unexpected mode='%s', defaulting to 'semantic'", mode)
         return "semantic"
     return mode
 
