@@ -11,6 +11,9 @@ from flask_cors import CORS
 from utils.websockets.sockets import socketio  # Import the Socket.IO instance
 from utils.emitters import emitters
 from routes.info_routes import info_bp
+import logging
+from logging.handlers import RotatingFileHandler
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rag_chat.db'
@@ -30,6 +33,26 @@ app.register_blueprint(info_bp, url_prefix='/info')
 socketio.init_app(app)
 print(f"Using async mode in app.py: {socketio.server.async_mode}")
 
+logging.basicConfig(
+    level=logging.DEBUG,          # capture DEBUG and above
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+file_handler = RotatingFileHandler(
+    filename="logs.log",   # path to your log file
+    maxBytes=10 * 1024 * 1024,       # rotate after 10 MB
+    backupCount=5                    # keep last 5 files
+)
+
+file_handler.setLevel(logging.DEBUG)  # capture DEBUG and above in file
+file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s %(name)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
+
+logger = logging.getLogger()          # root logger
+logger.addHandler(file_handler)
 
 def get_free_port(start_port=5000, max_port=5100):
     """Find a free port between start_port and max_port on localhost."""

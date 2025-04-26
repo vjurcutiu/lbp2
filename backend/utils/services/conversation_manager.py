@@ -11,6 +11,9 @@ from typing import Any, Dict, List, Optional, Union
 from utils.services.agentic.search_router import SearchRouter
 import json
 
+# Lazy-initialized SearchRouter
+_router: Optional[SearchRouter] = None
+
 def load_file_records():
     """
     Pull all uploaded files from the DB, read their text, and return
@@ -33,25 +36,32 @@ def load_file_records():
         })
     return records
 
-
 def build_keyword_index():
+    """
+    Build a simple keyword-only index from uploaded File records.
+    """
     items = []
     for f in File.query.filter_by(is_uploaded=True).all():
         kws = f.meta_data.get("keywords", [])
         items.append({
             "id": f.id,
             "metadata": {"keywords": json.dumps({"keywords": kws})},
-            # omit "text" and "file_path" entirely
         })
     return items
 
-keyword_items = build_keyword_index()
-router = SearchRouter(
-    items_for_keyword=keyword_items,
-    pinecone_namespace="default-namespace"
-)
-
-
+def get_search_router() -> SearchRouter:
+    """
+    Lazily instantiate SearchRouter within an application context.
+    """
+    global _router
+    if _router is None:
+        # Must be in app context to query the DB
+        items = build_keyword_index()
+        _router = SearchRouter(
+            items_for_keyword=items,
+            pinecone_namespace="default-namespace"
+        )
+    return _router
 
 class ConversationManager:
     def __init__(self, session, ai_service: OpenAIService, notifier):
@@ -121,7 +131,6 @@ class ConversationManager:
             history.append({"role": role, "content": msg.message})
         return history
 
-
 class MessageRepository:
     def __init__(self, session):
         self.session = session
@@ -152,32 +161,24 @@ class MessageRepository:
             query = query.filter_by(sender=sender)
         return query.all()
 
-
 class AIOrchestrator:
     def __init__(self, ai_service: OpenAIService, search_client=default_search):
         self.ai_service = ai_service
         self.search_client = search_client
 
     def get_response(self, user_message: str, chat_history: List[dict], docs: List[str]) -> str:
-        """
-        Build a ChatPayload from the existing chat_history plus the new user_message,
-        then call through to the OpenAIService. Optionally include retrieved docs.
-        """
-        openai_msgs: List[OpenAIMessage] = [
+        openai_msgs = [
             OpenAIMessage(role=entry["role"], content=entry["content"])
             for entry in chat_history
         ]
 
-        # If we have docs, prepend them as system context
         if docs:
             system_content = "\n\n".join(docs)
             openai_msgs.insert(0, OpenAIMessage(role="system", content=f"Relevant documents:\n{system_content}"))
 
         openai_msgs.append(OpenAIMessage(role="user", content=user_message))
-
         payload = ChatPayload(messages=openai_msgs)
         return self.ai_service.chat(payload)
-
 
 class SocketNotifier:
     def __init__(self, socketio, app):
@@ -205,10 +206,8 @@ class SocketNotifier:
     def emit_title(self, conversation_id: int, title: str):
         self.socketio.emit('conversation_title', {'id': conversation_id, 'title': title})
 
-
 # --- controllers/chat_controller.py ---
 from db.models import db as default_db
-
 
 def handle_frontend_message(
     text: str,
@@ -216,12 +215,15 @@ def handle_frontend_message(
     additional_params: dict = None,
     session=default_db.session,
     ai_service: OpenAIService = None,
-    search_client=search_router.search,
+    search_client=None,
     notifier=None
 ) -> dict:
     # Initialize services
     ai_service = ai_service or OpenAIService()
     notifier = notifier or SocketNotifier(socketio, current_app)
+
+    # Default search_client to our lazy router
+    search_client = search_client or (lambda *args, **kwargs: get_search_router().search(*args, **kwargs))
 
     # Build our conversation stack
     conv_mgr = ConversationManager(session, ai_service, notifier)
@@ -242,7 +244,7 @@ def handle_frontend_message(
     else:
         conv_mgr.update_summary(conversation, text, additional_params)
 
-    # Build chat history for the LLM
+    # Build chat history
     chat_history = conv_mgr.build_context(conversation)
 
     # Run routed search
