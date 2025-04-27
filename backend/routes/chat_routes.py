@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from utils.services.conversation_manager import handle_frontend_message
+from utils.services.conversation_manager import ConversationManager
 from utils.comms import get_all_conversation_ids, get_all_messages_for_conversation, delete_conversation, rename_conversation
 from utils.emitters.emitters import emit_conversation_update, emit_all_conversations
 
@@ -12,7 +12,7 @@ def chat():
     if not message:
         return jsonify({'error': 'No message provided.'}), 400
     conversation_id = data.get('conversation_id')
-    additional_params = data.get('additional_params', {})
+    additional_params = data.get('additional_params', {})    
     try:
         result = handle_frontend_message(
             text=message,

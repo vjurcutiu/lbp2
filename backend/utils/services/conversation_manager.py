@@ -1,5 +1,7 @@
 import logging
 import os
+import re
+import json
 from flask import current_app
 from db.models import db, Conversation, ConversationMessage, File
 from utils.services.ai_api_manager import OpenAIService
@@ -9,7 +11,7 @@ from utils.websockets.sockets import socketio
 import pendulum
 from typing import Any, Dict, List, Optional, Union
 from utils.services.agentic.search_router import SearchRouter
-import json
+
 
 # Lazy-initialized SearchRouter
 _router: Optional[SearchRouter] = None
@@ -49,16 +51,47 @@ def build_keyword_index():
         })
     return items
 
+def build_keyword_topics():
+    """
+    Extract and clean keyword topics from uploaded files' metadata.
+    """
+    topics = []
+    files = File.query.filter_by(is_uploaded=True).all()
+    for f in files:
+        kws_raw = f.meta_data.get("keywords", None)
+        if not kws_raw:
+            continue
+        # kws_raw may be a JSON string or a list
+        if isinstance(kws_raw, str):
+            try:
+                kws = json.loads(re.search(r"(\{.*\})", kws_raw, re.DOTALL).group(1))["keywords"]
+            except Exception as e:
+                logging.warning("Failed to parse keywords for file %s: %s", f.id, e)
+                continue
+        elif isinstance(kws_raw, list):
+            kws = kws_raw
+        else:
+            continue
+
+        topics.extend(kws)
+
+    # dedupe and normalize
+    clean = {t.strip().lower() for t in topics if isinstance(t, str) and t.strip()}
+    return list(clean)
+
+
 def get_search_router() -> SearchRouter:
     """
-    Lazily instantiate SearchRouter within an application context.
+    Lazily instantiate SearchRouter within an application context,
+    rebuilding topics from DB metadata.
     """
     global _router
     if _router is None:
-        # Must be in app context to query the DB
-        items = build_keyword_index()
+        items = load_file_records()
+        topics = build_keyword_topics()
         _router = SearchRouter(
             items_for_keyword=items,
+            keyword_topics=topics,
             pinecone_namespace="default-namespace"
         )
     return _router
@@ -130,6 +163,52 @@ class ConversationManager:
 
             history.append({"role": role, "content": msg.message})
         return history
+    
+    def handle_frontend_message(self, text: str, conversation_id: int = None, additional_params: dict = None) -> dict:
+        # Fetch or create the conversation
+        conversation = self.get_or_create(conversation_id)
+        is_new = self.is_new(conversation)
+
+        # Persist the user’s message
+        msg_repo = MessageRepository(self.session)
+        user_msg = msg_repo.add_user_message(conversation.id, text)
+        self.session.commit()
+
+        # Title or summary
+        if is_new:
+            self.generate_title(text, conversation)
+        else:
+            self.update_summary(conversation, text, additional_params)
+
+        # Build chat history
+        chat_history = self.build_context(conversation)
+
+        # ROUTED SEARCH
+        router = get_search_router()
+        results = router.search(
+            text,
+            top_k=(additional_params or {}).get("top_k", 3),
+            threshold=(additional_params or {}).get("threshold", 0.7),
+            limit=(additional_params or {}).get("limit", 3),
+        )
+        docs = [m["text"] for m in results.get("results", [])]
+        logging.debug("SearchRouter chose %s mode, returned %d docs", results.get("intent"), len(docs))
+
+        # AI REPLY
+        ai_orch = AIOrchestrator(self.ai_service, default_search)
+        ai_reply = ai_orch.get_response(text, chat_history, docs)
+
+        # Persist AI response
+        ai_msg = msg_repo.add_ai_message(conversation.id, ai_reply)
+        self.session.commit()
+
+        return {
+            "conversation_id": conversation.id,
+            "conversation_title": conversation.title,
+            "user_message": text,
+            "ai_response": ai_reply,
+            "new_conversation_id": conversation.id if is_new else None
+        }
 
 class MessageRepository:
     def __init__(self, session):
@@ -206,71 +285,3 @@ class SocketNotifier:
     def emit_title(self, conversation_id: int, title: str):
         self.socketio.emit('conversation_title', {'id': conversation_id, 'title': title})
 
-# --- controllers/chat_controller.py ---
-from db.models import db as default_db
-
-def handle_frontend_message(
-    text: str,
-    conversation_id: int = None,
-    additional_params: dict = None,
-    session=default_db.session,
-    ai_service: OpenAIService = None,
-    search_client=None,
-    notifier=None
-) -> dict:
-    # Initialize services
-    ai_service = ai_service or OpenAIService()
-    notifier = notifier or SocketNotifier(socketio, current_app)
-
-    # Default search_client to our lazy router
-    search_client = search_client or (lambda *args, **kwargs: get_search_router().search(*args, **kwargs))
-
-    # Build our conversation stack
-    conv_mgr = ConversationManager(session, ai_service, notifier)
-    msg_repo = MessageRepository(session)
-    ai_orch = AIOrchestrator(ai_service, search_client)
-
-    # Fetch or create the conversation
-    conversation = conv_mgr.get_or_create(conversation_id)
-    is_new = conv_mgr.is_new(conversation)
-
-    # Persist the user’s message
-    user_msg = msg_repo.add_user_message(conversation.id, text)
-    session.commit()
-
-    # If it’s brand new, generate a title; otherwise update the summary
-    if is_new:
-        conv_mgr.generate_title(text, conversation)
-    else:
-        conv_mgr.update_summary(conversation, text, additional_params)
-
-    # Build chat history
-    chat_history = conv_mgr.build_context(conversation)
-
-    # Run routed search
-    params = additional_params or {}
-    results = search_client(
-        text,
-        top_k=params.get("top_k", 3),
-        threshold=params.get("threshold", 0.7),
-        limit=params.get("limit", 3),
-    )
-    docs = [m["text"] for m in results.get("results", [])]
-    logging.debug("SearchRouter chose %s mode, returned %d docs",
-                  results.get("mode"), len(docs))
-
-    # Ask the AI for a reply
-    ai_reply = ai_orch.get_response(text, chat_history, docs)
-
-    # Persist the AI’s response
-    ai_msg = msg_repo.add_ai_message(conversation.id, ai_reply)
-    session.commit()
-
-    # Return payload back to frontend
-    return {
-        "conversation_id": conversation.id,
-        "conversation_title": conversation.title,
-        "user_message": text,
-        "ai_response": ai_reply,
-        "new_conversation_id": conversation.id if is_new else None
-    }
