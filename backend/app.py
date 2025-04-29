@@ -14,7 +14,7 @@ from utils.emitters.emitters import emitters
 from utils.services.ai_api_manager import OpenAIService
 from utils.services.conversation_manager import SocketNotifier, ConversationManager
 
-from routes.chat_routes import chat_bp
+from routes.chat_routes import create_chat_blueprint
 from routes.file_processing_routes import file_bp
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
@@ -69,8 +69,12 @@ def get_free_port(start_port=5000, max_port=5100) -> int:
     raise RuntimeError("No free port found in the specified range.")
 
 
-def register_blueprints(app: Flask):
-    app.register_blueprint(chat_bp, url_prefix='/conversation')
+def register_blueprints(app: Flask, conv_manager: ConversationManager):
+    # Chat endpoints under /conversation/*
+    chat_bp = create_chat_blueprint(conv_manager)
+    app.register_blueprint(chat_bp)
+
+    # Other feature blueprints
     app.register_blueprint(file_bp)
     app.register_blueprint(extra_bp, url_prefix='/extra')
     app.register_blueprint(info_bp, url_prefix='/info')
@@ -125,25 +129,23 @@ def create_app(config_object: str = None) -> Flask:
     emitters.init_app(app)
 
     # Setup services
-    notifier = SocketNotifier(socketio, app)
-    ai_service = OpenAIService()
+    notifier     = SocketNotifier(socketio, app)
+    ai_service   = OpenAIService()
     conv_manager = ConversationManager(db.session, ai_service, notifier)
 
     # Configure logging
     configure_logging(app)
     app.logger = structlog.get_logger(__name__).bind(component="app")
 
-    # Wire routes and CLI
-    from routes.chat_routes import init_chat_routes
-    init_chat_routes(chat_bp, conv_manager)
-    register_blueprints(app)
+    # Register blueprints and CLI
+    register_blueprints(app, conv_manager)
     register_cli_commands(app)
 
     return app
 
 
 if __name__ == '__main__':
-    app = create_app()
+    app  = create_app()
     port = get_free_port()
     app.logger.info("app starting", host="127.0.0.1", port=port, debug=app.debug)
     print(f"Starting Flask app on port {port}")
