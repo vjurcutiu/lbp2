@@ -30,27 +30,27 @@ class EmitterManager:
         def _emit_conversation(mapper, connection, target):
             self.emit_conversation_update(target.id)
 
-    def emit(self, event_name, data, broadcast=True):
+    def emit(self, event_name, data):
         """Emit an event via Socket.IO."""
         logging.info(f"Emitting event '{event_name}' with data: {data}")
-        socketio.emit(event_name, data, broadcast=broadcast)
+        socketio.emit(event_name, data)
 
-    def emit_conversation_update(self, conversation_id, broadcast=True):
+    def emit_conversation_update(self, conversation_id):
         """Emit update for a single conversation."""
         with self.app.app_context():
             conversation = Conversation.query.get(conversation_id)
             if conversation:
                 data = conversation_to_dict(conversation)
-                self.emit("conversation_update", data, broadcast=broadcast)
+                self.emit("conversation_update", data)
             else:
                 logging.error(f"Conversation with ID {conversation_id} not found.")
 
-    def emit_all_conversations(self, broadcast=True):
+    def emit_all_conversations(self):
         """Emit list of all conversations."""
         with self.app.app_context():
             conversations = Conversation.query.all()
             data = [conversation_to_dict(conv) for conv in conversations]
-            self.emit("conversation_list", data, broadcast=broadcast)
+            self.emit("conversation_list", data)
 
 # Singleton instance for application use
 emitters = EmitterManager()

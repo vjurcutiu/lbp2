@@ -14,9 +14,10 @@ def create_chat_blueprint(conv_manager):
     @bp.route('/chat', methods=['POST'])
     def post_message():
         data = request.get_json() or {}
+        print(data)
         try:
             result = conv_manager.handle_frontend_message(
-                text=data['text'],
+                text=data['message'],
                 conversation_id=data.get('conversation_id'),
                 additional_params=data.get('params'),
             )
