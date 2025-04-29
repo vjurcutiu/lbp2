@@ -18,6 +18,9 @@ def identify_intent(
     - If query contains any of keyword_topics (case-insensitive), return 'keyword'.
     - Otherwise ask the LLM: 'semantic' vs. 'conversational'.
     """
+    # Log incoming keyword_topics for diagnostics
+    logger.debug("identify_intent called with keyword_topics=%s, query='%s'", keyword_topics, query)
+
     lower = query.lower()
     for topic in keyword_topics:
         if topic.lower() in lower:

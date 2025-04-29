@@ -285,104 +285,107 @@ def generate_keywords(
     """
     Generate up to 8 keywords for a Romanian legal document.
 
-    New methods:
-      - "flashtext"    : FlashText lookup against flash_vocab
-      - "flash_fuzzy"  : FlashText lookup + fuzzy deduplication (threshold=fuzzy_threshold)
-
-    Existing methods unchanged:
-      - "openai"      : GPT-based extraction (default)
-      - "tfidf", "rake", "yake"
-      - "pke"         : Graph-based via pke (TextRank)
-      - "keybert"     : Embedding-based via KeyBERT
-      - "lda"         : Topic modeling via Gensim LDA
-      - "word2vec"    : Embedding-based via Gensim Word2Vec
+    Methods:
+      - "openai": GPT-based extraction (default)
+      - "tfidf", "rake", "yake": traditional extractors
+      - "pke": graph-based
+      - "keybert": embedding-based
+      - "lda": topic modeling
+      - "word2vec": embedding-based
+      - "flashtext", "flash_fuzzy": FlashText variants
+    Returns JSON string with schema:
+    {
+      "locatie": ..., "data": ..., "domeniu": ..., "hotarare": ..., "cuvinte_cheie": [...]  
+    }
     """
     cleaned = preprocess_text(text)
     if len(cleaned.split()) < 30:
-        return json.dumps({"keywords": []}, ensure_ascii=False)
+        return json.dumps({
+            "locatie": "",
+            "data": "",
+            "domeniu": "",
+            "hotarare": "",
+            "cuvinte_cheie": []
+        }, ensure_ascii=False)
 
-    # FlashText-only
+    # determine keywords based on method
     if method == "flashtext":
         if not flash_vocab:
             raise ValueError("flash_vocab must be provided for flashtext method")
         keywords = extract_flashtext_keywords(cleaned, flash_vocab)
-
-    # FlashText + fuzzy dedupe
     elif method == "flash_fuzzy":
         if not flash_vocab:
             raise ValueError("flash_vocab must be provided for flash_fuzzy method")
         found = extract_flashtext_keywords(cleaned, flash_vocab)
         keywords = dedupe_keywords_fuzzy(found, threshold=fuzzy_threshold)
-
-    # GPT-based extraction
     elif method == "openai":
         instruction = (
             """SYSTEM:
-            You are a highly accurate AI assistant specialized in extracting keywords from Romanian legal documents.
+            You are a highly accurate AI assistant specialized in extracting information from Romanian legal documents.
 
             USER:
-            Mai jos ai textul unei hotărâri judecătorești în limba română. Din acest text, generează întotdeauna, în această ordine, un obiect JSON valid cu următoarele câmpuri:
+            From the following decision text in Romanian, always output a valid JSON object with these fields in this order:
+            - locatie (string)
+            - data (string, format \"ZZ.MM.AAAA\")
+            - domeniu (string)
+            - hotarare (string)
+            - cuvinte_cheie (array of up to 8 strings)
 
-            - Locatie (string)  
-            - Data (string, format "ZZ.MM.AAAA")  
-            - Domeniu (string)  
-            - Hotarare (string)  
-            - cuvinte_cheie (listă de 8 string‑uri)
+            Respond only with the JSON, without markdown formatting.
 
-            Exemplu de schemă de răspuns:
-
-            ```json
+            Example schema:
             {
-            "locatie": "…, instanța …",
-            "data": "ZZ.MM.AAAA",
-            "domeniu": "drept penal",
-            "hotarare": "condamnare/acord de recunoaștere etc.",
-            "cuvinte_cheie": [
+              "locatie": "…, instanța …",
+              "data": "ZZ.MM.AAAA",
+              "domeniu": "drept penal",
+              "hotarare": "condamnare/acord de recunoaștere etc.",
+              "cuvinte_cheie": [
                 "primul cuvânt",
                 "al doilea cuvânt",
                 "…",
                 "al optulea cuvânt"
-            ]
+              ]
             }"""
         )
         raw = _generic_completion(cleaned, instruction, DEFAULT_KEYWORD_MODEL).strip()
-        compact = re.sub(r"[\r\n]+", " ", raw)
+        # parse raw JSON
         try:
-            arr = json.loads(compact)
-            if isinstance(arr, dict) and "keywords" in arr:
-                arr = arr["keywords"]
+            result = json.loads(raw)
         except json.JSONDecodeError:
-            lines = re.split(r"[\r\n]+", raw)
-            arr = [ln.strip().lstrip("-•  ").strip() for ln in lines if ln.strip()]
-        keywords = arr[:8]
-
-    # TF‑IDF, RAKE, YAKE
+            # fallback: find JSON block
+            match = re.search(r"\{.*\}", raw)
+            result = json.loads(match.group(0)) if match else {}
+        # ensure cuvinte_cheie length
+        kws = result.get("cuvinte_cheie", [])[:8]
+        # build output
+        return json.dumps({
+            "locatie": result.get("locatie", ""),
+            "data": result.get("data", ""),
+            "domeniu": result.get("domeniu", ""),
+            "hotarare": result.get("hotarare", ""),
+            "cuvinte_cheie": kws
+        }, ensure_ascii=False)
     elif method in ("tfidf", "rake", "yake"):
-        extractor = {
-            "tfidf": extract_tfidf_keywords,
-            "rake":  extract_rake_keywords,
-            "yake":  extract_yake_keywords,
-        }[method]
+        extractor = {"tfidf": extract_tfidf_keywords, "rake": extract_rake_keywords, "yake": extract_yake_keywords}[method]
         keywords = extractor(cleaned)
-
-    # Graph‑based (TextRank, etc.)
     elif method == "pke":
         keywords = extract_pke_keywords(cleaned)
-
-    # Embedding‑based KeyBERT
     elif method == "keybert":
         keywords = extract_keybert_keywords(cleaned)
-
-    # Topic modeling via LDA
     elif method == "lda":
         keywords = extract_gensim_lda_keywords(cleaned)
-
-    # Embedding‑based Word2Vec centroid
     elif method == "word2vec":
         keywords = extract_gensim_word2vec_keywords(cleaned)
-
     else:
         raise ValueError(f"Unknown extraction method: {method!r}")
 
-    return json.dumps({"keywords": keywords}, ensure_ascii=False)
+    # default return for non-openai: embed keywords only schema
+    return json.dumps({
+        "locatie": "",
+        "data": "",
+        "domeniu": "",
+        "hotarare": "",
+        "cuvinte_cheie": keywords[:8]
+    }, ensure_ascii=False)
+
 

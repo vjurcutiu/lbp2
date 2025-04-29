@@ -15,6 +15,8 @@ from utils.services.agentic.search_router import SearchRouter
 
 # Lazy-initialized SearchRouter
 _router: Optional[SearchRouter] = None
+logger = logging.getLogger(__name__)
+
 
 def load_file_records():
     """
@@ -56,27 +58,50 @@ def build_keyword_topics():
     Extract and clean keyword topics from uploaded files' metadata.
     """
     topics = []
-    files = File.query.filter_by(is_uploaded=True).all()
-    for f in files:
+    for f in File.query.all():
         kws_raw = f.meta_data.get("keywords", None)
+        logger.debug("build_keyword_topics: file_id=%s raw_kws=%r", f.id, kws_raw)
+
         if not kws_raw:
             continue
-        # kws_raw may be a JSON string or a list
+
+        # Parse out a JSON blob if it's stored as a string
         if isinstance(kws_raw, str):
             try:
-                kws = json.loads(re.search(r"(\{.*\})", kws_raw, re.DOTALL).group(1))["keywords"]
+                # grab the full dict, not just .["keywords"]
+                kw_dict = json.loads(re.search(r"(\{.*\})", kws_raw, re.DOTALL).group(1))
             except Exception as e:
-                logging.warning("Failed to parse keywords for file %s: %s", f.id, e)
+                logger.warning("Failed to parse keywords for file %s: %s", f.id, e)
                 continue
+
+        elif isinstance(kws_raw, dict):
+            kw_dict = kws_raw
+
         elif isinstance(kws_raw, list):
-            kws = kws_raw
+            # If it's already a list, treat it as the old-style "keywords" array
+            # and stick it under the generic key
+            kw_dict = {"cuvinte_cheie": kws_raw}
+
         else:
             continue
 
-        topics.extend(kws)
+        # Extract all top-level keys *except* cuvinte_cheie
+        for key, value in kw_dict.items():
+            if key == "cuvinte_cheie":
+                continue
+            # If the value is a primitive, add the key itself as a topic.
+            # Optionally you could also add the value (e.g. the city name)
+            if isinstance(value, str):
+                topics.append(key)
+                # If you want the actual value too, uncomment:
+                # topics.append(value)
+            # If you had nested arrays of keywords under other keys,
+            # you could flatten them here as well.
 
     # dedupe and normalize
     clean = {t.strip().lower() for t in topics if isinstance(t, str) and t.strip()}
+    logger.debug("build_keyword_topics: deduped topics=%s", clean)
+
     return list(clean)
 
 
@@ -89,6 +114,7 @@ def get_search_router() -> SearchRouter:
     if _router is None:
         items = load_file_records()
         topics = build_keyword_topics()
+        logger.debug("get_search_router: initializing router with topics=%s", topics)
         _router = SearchRouter(
             items_for_keyword=items,
             keyword_topics=topics,
