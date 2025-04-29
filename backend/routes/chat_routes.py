@@ -1,9 +1,22 @@
 from flask import Blueprint, request, jsonify, current_app
 from utils.services.conversation_manager import ConversationManager
 from utils.comms import get_all_conversation_ids, get_all_messages_for_conversation, delete_conversation, rename_conversation
-from utils.emitters.emitters import emit_conversation_update, emit_all_conversations
+from utils.emitters.emitters import emitters
 
 chat_bp = Blueprint('chat', __name__)
+
+
+def init_chat_routes(bp, conv_manager: ConversationManager):
+    @bp.route('/message', methods=['POST'])
+    def post_message():
+        data = request.get_json()
+        result = conv_manager.handle_frontend_message(
+            text=data['text'],
+            conversation_id=data.get('conversation_id'),
+            additional_params=data.get('params'),
+        )
+        return jsonify(result)
+
 
 @chat_bp.route('/chat', methods=['POST'])
 def chat():
@@ -24,6 +37,7 @@ def chat():
         current_app.logger.error('Error processing chat message', exc_info=True)
         return jsonify({'error': 'Internal server error'}), 500
 
+
 @chat_bp.route('/conversation_ids', methods=['GET'])
 def conversation_ids_route():
     try:
@@ -32,6 +46,7 @@ def conversation_ids_route():
     except Exception:
         current_app.logger.error('Error fetching conversation ids', exc_info=True)
         return jsonify({'error': 'Failed to fetch conversation ids.'}), 500
+
 
 @chat_bp.route('/<int:conversation_id>/messages', methods=['GET'])
 def get_conversation_messages(conversation_id):
@@ -42,6 +57,7 @@ def get_conversation_messages(conversation_id):
         current_app.logger.error(f'Error fetching messages for {conversation_id}', exc_info=True)
         return jsonify({'error': 'Failed to retrieve messages.'}), 500
 
+
 @chat_bp.route('/delete', methods=['POST'])
 def delete_conversation_route():
     data = request.get_json() or {}
@@ -50,12 +66,13 @@ def delete_conversation_route():
         return jsonify({'error': 'Conversation ID is required.'}), 400
     try:
         res = delete_conversation(convo_id)
-        emit_all_conversations()
+        emitters.emit_all_conversations()
         status = 200 if 'message' in res else 400
         return jsonify(res), status
     except Exception:
         current_app.logger.error('Error deleting conversation', exc_info=True)
         return jsonify({'error': 'Internal server error'}), 500
+
 
 @chat_bp.route('/rename', methods=['POST'])
 def rename_conversation_route():
@@ -67,12 +84,13 @@ def rename_conversation_route():
     try:
         res = rename_conversation(convo_id, new_title)
         if 'message' in res:
-            emit_conversation_update(convo_id)
+            emitters.emit_conversation_update(convo_id)
             return jsonify(res), 200
         return jsonify(res), 400
     except Exception:
         current_app.logger.error('Error renaming conversation', exc_info=True)
         return jsonify({'error': 'Internal server error'}), 500
+
 
 @chat_bp.route('/list', methods=['GET'])
 def list_conversations():

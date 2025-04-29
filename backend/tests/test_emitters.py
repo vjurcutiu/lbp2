@@ -5,7 +5,7 @@ import pytest
 from flask import Flask
 from db.models import db, Conversation
 from utils.websockets import sockets
-from utils.emitters import emitters  # This registers the event listener
+from backend.utils.emitters import emitters_old  # This registers the event listener
 
 @pytest.fixture
 def app():
