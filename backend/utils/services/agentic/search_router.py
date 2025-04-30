@@ -7,7 +7,7 @@ from utils.services.ai_api_manager import OpenAIService
 
 from utils.services.agentic.query_processor import (
     identify_intent,
-    extract_keyword,
+    _llm_extract_keyword,
     process_keyword_results,
     process_semantic_results,
 )
@@ -51,8 +51,8 @@ class SearchRouter:
         self.logger.info("search_router.search: intent=%s", intent)
 
         if intent == "keyword":
-            topic = extract_keyword(query, self.keyword_topics)
-            self.logger.debug("search_router.search: extract_keyword returned %s", topic)
+            topic = _llm_extract_keyword(query, self.keyword_topics)
+            self.logger.debug("search_router.search: _llm_extract_keyword returned %s", topic)
             if topic is None:
                 self.logger.warning("search_router.search: no topic extracted, switching to semantic")
                 intent = "semantic"

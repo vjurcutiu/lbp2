@@ -11,44 +11,43 @@ def identify_intent(
     query: str,
     keyword_topics: List[str],
     openai_service: OpenAIService,
-    system_instruction: str = None,
+    system_instruction: Optional[str] = None,
 ) -> str:
     """
     Decide overall intent: 'keyword', 'semantic', or 'conversational'.
-    - If query contains any of keyword_topics (case-insensitive), return 'keyword'.
-    - Otherwise ask the LLM: 'semantic' vs. 'conversational'.
+
+    1) LLM-backed keyword extraction: pick one of keyword_topics or NONE.
+    2) If we got a topic, return 'keyword'.
+    3) Otherwise ask the LLM to choose 'semantic' vs. 'conversational'.
     """
-    # Log incoming keyword_topics for diagnostics
-    logger.debug("identify_intent called with keyword_topics=%s, query='%s'", keyword_topics, query)
+    # 1) LLM picks topic
+    logger.debug("identify_intent: querying LLM for keyword topic match")
+    topic = _llm_extract_keyword(query, keyword_topics, openai_service)
+    if topic:
+        logger.debug("identify_intent: LLM matched keyword topic='%s'", topic)
+        return "keyword"
 
-    lower = query.lower()
-    for topic in keyword_topics:
-        if topic.lower() in lower:
-            logger.debug("identify_intent: matched keyword topic='%s'", topic)
-            return "keyword"
-
-    # Fallback: ask LLM to choose between semantic vs. conversational
+    # 2) Fallback: semantic vs conversational
+    logger.debug("identify_intent: no keyword match, fallback to semantic/conversational")
     system_instr = system_instruction or (
         "You are a query intent classifier. Given the user's query, choose exactly one "
         "intent: 'semantic' (they want a semantic document search) or 'conversational' "
         "(they want a chat-style response)."
     )
     prompt = f'Query: "{query}"'
-    logger.debug("identify_intent: no topic match, falling back to LLM (%s)", 
-                 "custom system" if system_instruction else "default system")
     try:
         payload = ChatPayload(
             model=openai_service.model_map['chat'],
             messages=[
                 {'role': 'system', 'content': system_instr},
-                {'role': 'user', 'content': prompt},
+                {'role': 'user',   'content': prompt},
             ],
             stream=False,
             temperature=0,
             top_p=1.0,
         )
         response = openai_service.chat(payload).strip().lower()
-        logger.debug("identify_intent: LLM response='%s'", response)
+        logger.debug("identify_intent: secondary LLM response='%s'", response)
         if response in {"semantic", "conversational"}:
             return response
         logger.warning("identify_intent: unexpected LLM intent='%s', defaulting to 'semantic'", response)
@@ -58,17 +57,49 @@ def identify_intent(
         return "semantic"
 
 
-def extract_keyword(
+def _llm_extract_keyword(
     query: str,
     keyword_topics: List[str],
+    openai_service: OpenAIService,
+    system_instruction: Optional[str] = None,
 ) -> Optional[str]:
     """
-    If any topic from keyword_topics appears in query (case-insensitive),
-    returns that topic; otherwise None.
+    Use the LLM to pick exactly one topic from keyword_topics that best matches the query,
+    or return None if none apply.
     """
-    lower = query.lower()
+    system_instr = system_instruction or (
+        "You are an intent classifier. "
+        "Given a user query and a fixed list of topics, "
+        "choose exactly one topic name that best matches the query, "
+        "or reply exactly NONE if none of the topics apply. "
+        "Do NOT output anything else."
+    )
+
+    topics_list = ", ".join(keyword_topics)
+    prompt = (
+        f"Topics: {topics_list}\n"
+        f"Query: \"{query}\"\n"
+        "Answer with one of the topics, or NONE."
+    )
+
+    payload = ChatPayload(
+        model=openai_service.model_map['chat'],
+        messages=[
+            {'role': 'system',  'content': system_instr},
+            {'role': 'user',    'content': prompt},
+        ],
+        stream=False,
+        temperature=0,
+        top_p=1.0,
+    )
+    try:
+        raw = openai_service.chat(payload).strip()
+    except OpenAIAPIError:
+        return None
+
+    normalized = raw.lower()
     for topic in keyword_topics:
-        if topic.lower() in lower:
+        if normalized == topic.lower():
             return topic
     return None
 
