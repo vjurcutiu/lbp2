@@ -1,0 +1,49 @@
+--- a/utils/services/conversation_manager.py
++++ b/utils/services/conversation_manager.py
+@@ top
+-from utils.services.agentic.search_router import SearchRouter
+-
+-# Lazy-initialized SearchRouter
+-_router: Optional[SearchRouter] = None
+-
+-def get_search_router() -> SearchRouter:
+-    """
+-    Lazily instantiate SearchRouter within an application context,
+-    rebuilding topics from DB metadata.
+-    """
+-    global _router
+-    if _router is None:
+-        items = load_file_records()
+-        topics = build_keyword_topics()
+-        logger.debug("get_search_router: initializing router with topics=%s", topics)
+-        _router = SearchRouter(
+-            keyword_topics=topics
+-        )
+-    return _router
++from utils.services.agentic.search_router import SearchRouter
+
+ class ConversationManager:
+-    def __init__(self, session, ai_service: OpenAIService, notifier):
++    def __init__(
++        self,
++        session,
++        ai_service: OpenAIService,
++        search_router: SearchRouter,
++        notifier
++    ):
+         self.session = session
+         self.ai_service = ai_service
+-        self.notifier = notifier
++        self.search_router = search_router
++        self.notifier = notifier
+@@ def handle_frontend_message(self, text: str, ...):
+-        # ROUTED SEARCH
+-        router = get_search_router()
+-        results = router.search(
++        # ROUTED SEARCH
++        results = self.search_router.search(
+             text,
+             top_k=(additional_params or {}).get("top_k", 3),
+             threshold=(additional_params or {}).get("threshold", 0.7),
+             limit=(additional_params or {}).get("limit", 3),
+         )

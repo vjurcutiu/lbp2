@@ -13,8 +13,6 @@ from typing import Any, Dict, List, Optional, Union
 from utils.services.agentic.search_router import SearchRouter
 
 
-# Lazy-initialized SearchRouter
-_router: Optional[SearchRouter] = None
 logger = logging.getLogger(__name__)
 
 
@@ -65,10 +63,8 @@ def build_keyword_topics():
         if not kws_raw:
             continue
 
-        # Parse out a JSON blob if it's stored as a string
         if isinstance(kws_raw, str):
             try:
-                # grab the full dict, not just .["keywords"]
                 kw_dict = json.loads(re.search(r"(\{.*\})", kws_raw, re.DOTALL).group(1))
             except Exception as e:
                 logger.warning("Failed to parse keywords for file %s: %s", f.id, e)
@@ -78,54 +74,34 @@ def build_keyword_topics():
             kw_dict = kws_raw
 
         elif isinstance(kws_raw, list):
-            # If it's already a list, treat it as the old-style "keywords" array
-            # and stick it under the generic key
             kw_dict = {"cuvinte_cheie": kws_raw}
 
         else:
             continue
 
-        # Extract all top-level keys *except* cuvinte_cheie
         for key, value in kw_dict.items():
             if key == "cuvinte_cheie":
                 continue
-            # If the value is a primitive, add the key itself as a topic.
-            # Optionally you could also add the value (e.g. the city name)
             if isinstance(value, str):
                 topics.append(key)
-                # If you want the actual value too, uncomment:
-                # topics.append(value)
-            # If you had nested arrays of keywords under other keys,
-            # you could flatten them here as well.
 
-    # dedupe and normalize
     clean = {t.strip().lower() for t in topics if isinstance(t, str) and t.strip()}
     logger.debug("build_keyword_topics: deduped topics=%s", clean)
 
     return list(clean)
 
 
-def get_search_router() -> SearchRouter:
-    """
-    Lazily instantiate SearchRouter within an application context,
-    rebuilding topics from DB metadata.
-    """
-    global _router
-    if _router is None:
-        items = load_file_records()
-        topics = build_keyword_topics()
-        logger.debug("get_search_router: initializing router with topics=%s", topics)
-        _router = SearchRouter(
-            items_for_keyword=items,
-            keyword_topics=topics,
-            pinecone_namespace="default-namespace"
-        )
-    return _router
-
 class ConversationManager:
-    def __init__(self, session, ai_service: OpenAIService, notifier):
+    def __init__(
+        self,
+        session,
+        ai_service: OpenAIService,
+        search_router: SearchRouter,
+        notifier
+    ):
         self.session = session
         self.ai_service = ai_service
+        self.search_router = search_router
         self.notifier = notifier
 
     def get_or_create(self, conversation_id=None):
@@ -189,42 +165,30 @@ class ConversationManager:
 
             history.append({"role": role, "content": msg.message})
         return history
-    
+
     def handle_frontend_message(self, text: str, conversation_id: int = None, additional_params: dict = None) -> dict:
-        # Fetch or create the conversation
         conversation = self.get_or_create(conversation_id)
         is_new = self.is_new(conversation)
 
-        # Persist the user’s message
         msg_repo = MessageRepository(self.session)
         user_msg = msg_repo.add_user_message(conversation.id, text)
         self.session.commit()
 
-        # Title or summary
         if is_new:
             self.generate_title(text, conversation)
         else:
             self.update_summary(conversation, text, additional_params)
 
-        # Build chat history
         chat_history = self.build_context(conversation)
 
-        # ROUTED SEARCH
-        router = get_search_router()
-        results = router.search(
-            text,
-            top_k=(additional_params or {}).get("top_k", 3),
-            threshold=(additional_params or {}).get("threshold", 0.7),
-            limit=(additional_params or {}).get("limit", 3),
-        )
+        results = self.search_router.search(text)
+
         docs = [m["text"] for m in results.get("results", [])]
         logging.debug("SearchRouter chose %s mode, returned %d docs", results.get("intent"), len(docs))
 
-        # AI REPLY
         ai_orch = AIOrchestrator(self.ai_service, default_search)
         ai_reply = ai_orch.get_response(text, chat_history, docs)
 
-        # Persist AI response
         ai_msg = msg_repo.add_ai_message(conversation.id, ai_reply)
         self.session.commit()
 
@@ -310,4 +274,3 @@ class SocketNotifier:
 
     def emit_title(self, conversation_id: int, title: str):
         self.socketio.emit('conversation_title', {'id': conversation_id, 'title': title})
-

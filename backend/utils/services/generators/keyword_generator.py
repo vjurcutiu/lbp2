@@ -2,7 +2,6 @@ import os
 import logging
 import re
 import json
-import spacy
 from openai import OpenAI
 try:
     from openai.error import OpenAIError
@@ -11,34 +10,15 @@ except ImportError:
         pass
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_selection import SelectKBest, chi2
-from rake_nltk import Rake
-import yake
-import pke
-from keybert import KeyBERT
-from sentence_transformers import SentenceTransformer
-from gensim import corpora, models
-from flashtext import KeywordProcessor
-from thefuzz import fuzz
-
-# --- New imports for ontology integration ---
-import rdflib
-from owlready2 import get_ontology
-
-# Load Romanian NLP model
-nlp = spacy.load("ro_core_news_sm")
+# Lazy-loaded NLP model placeholder\_nlp = None
 DEFAULT_KEYWORD_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
 
 # -----------------------------------------------------------------------------
 #                    Ontology & Taxonomy Integration
 # -----------------------------------------------------------------------------
 
-def load_rdf_ontology(path: str, format: str = "xml") -> rdflib.Graph:
-    """
-    Load an RDF/OWL ontology file into an rdflib.Graph.
-    Supported formats: xml, ttl, owl, rdf, json-ld
-    """
+def load_rdf_ontology(path: str, format: str = "xml") -> 'rdflib.Graph':
+    import rdflib
     g = rdflib.Graph()
     g.parse(path, format=format)
     logging.getLogger("KeywordGenerator").info(f"Loaded RDF ontology from {path}")
@@ -46,21 +26,15 @@ def load_rdf_ontology(path: str, format: str = "xml") -> rdflib.Graph:
 
 
 def load_owl_ontology(path: str):
-    """
-    Load an OWL ontology using Owlready2.
-    Returns an Owlready2 ontology object.
-    """
+    from owlready2 import get_ontology
     onto = get_ontology(path).load()
     logging.getLogger("KeywordGenerator").info(f"Loaded OWL ontology from {path}")
     return onto
 
 
-def index_labels_from_rdf(graph: rdflib.Graph, lang: str = "ro") -> dict[str, rdflib.URIRef]:
-    """
-    Build a mapping from label (rdfs:label, skos:prefLabel, skos:altLabel) to URI.
-    Filters labels by language tag if present.
-    """
+def index_labels_from_rdf(graph: 'rdflib.Graph', lang: str = "ro") -> dict[str, str]:
     from rdflib.namespace import RDFS
+    import rdflib
     SKOS = rdflib.Namespace("http://www.w3.org/2004/02/skos/core#")
     label_predicates = [RDFS.label, SKOS.prefLabel, SKOS.altLabel]
     label_map: dict[str, rdflib.URIRef] = {}
@@ -68,42 +42,29 @@ def index_labels_from_rdf(graph: rdflib.Graph, lang: str = "ro") -> dict[str, rd
         if pred in label_predicates and isinstance(obj, rdflib.Literal):
             if obj.language and obj.language != lang:
                 continue
-            text = str(obj).lower()
-            label_map[text] = subj
+            label_map[str(obj).lower()] = subj
     logging.getLogger("KeywordGenerator").debug(f"Indexed {len(label_map)} labels from RDF graph")
     return label_map
 
 
-def map_terms_to_ontology(
-    terms: list[str],
-    label_map: dict[str, rdflib.URIRef],
-    matcher: str = "exact",
-    fuzzy_threshold: int = 85
-) -> dict[str, str]:
-    """
-    Map extracted terms to ontology URIs using label_map.
-    matcher: 'exact' or 'fuzzy'.
-    Returns dict of term -> URI (string) or None if no match.
-    """
+def map_terms_to_ontology(terms: list[str], label_map: dict[str, str], matcher: str = "exact", fuzzy_threshold: int = 85) -> dict[str, str]:
+    from thefuzz import fuzz
     mapped: dict[str, str] = {}
     for term in terms:
         key = term.lower()
         if matcher == "exact" and key in label_map:
             mapped[term] = str(label_map[key])
         elif matcher == "fuzzy":
-            # find best fuzzy match
             best, score = None, 0
             for label, uri in label_map.items():
                 s = fuzz.token_set_ratio(key, label)
                 if s > score:
                     best, score = label, s
-            if score >= fuzzy_threshold:
-                mapped[term] = str(label_map[best])
-            else:
-                mapped[term] = None
+            mapped[term] = str(label_map[best]) if score >= fuzzy_threshold else None
         else:
             mapped[term] = None
     return mapped
+
 
 @retry(
     retry=retry_if_exception_type(OpenAIError),
@@ -111,9 +72,6 @@ def map_terms_to_ontology(
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
 def _generic_completion(prompt: str, system_instruction: str, model: str) -> str:
-    """
-    Internal helper for single-turn completions.
-    """
     logger = logging.getLogger("KeywordGenerator")
     logger.debug("Generic completion for keywords [model=%s]", model)
     messages = [
@@ -128,22 +86,23 @@ def _generic_completion(prompt: str, system_instruction: str, model: str) -> str
     return response.choices[0].message.content
 
 
+def _get_nlp():
+    global placeholder_nlp
+    if placeholder_nlp is None:
+        import spacy
+        placeholder_nlp = spacy.load("ro_core_news_sm")
+    return placeholder_nlp
+
+
 def preprocess_text(text: str) -> str:
-    """
-    Clean and normalize document text:
-    - Strip boilerplate legal citations, headers/footers, footnotes
-    - Normalize whitespace & punctuation, remove newlines
-    - Correct common OCR errors (placeholder)
-    - Lemmatize and preserve multi-word entities
-    """
     logger = logging.getLogger("KeywordGenerator")
     text = re.sub(r"^\s*\[?\d+\]?\s.*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"Pagina\s+\d+\s+din\s+\d+", "", text)
     text = re.sub(r"[\r\n]+", " ", text)
     text = re.sub(r"[\s\f\t\v]+", " ", text).strip()
-    corrections = {'0': 'O', '1': 'I'}
-    for wrong, right in corrections.items():
+    for wrong, right in {'0': 'O', '1': 'I'}.items():
         text = text.replace(wrong, right)
+    nlp = _get_nlp()
     doc = nlp(text)
     with doc.retokenize() as retokenizer:
         for ent in doc.ents:
@@ -153,6 +112,8 @@ def preprocess_text(text: str) -> str:
 
 
 def extract_tfidf_keywords(text: str, top_k: int = 8, ngram_range=(1,3)) -> list[str]:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.feature_selection import SelectKBest, chi2
     vect = TfidfVectorizer(
         ngram_range=ngram_range,
         stop_words="romanian",
@@ -160,7 +121,7 @@ def extract_tfidf_keywords(text: str, top_k: int = 8, ngram_range=(1,3)) -> list
         min_df=2,
     )
     X = vect.fit_transform([text])
-    X_dup = X.vstack([X])  # two identical samples
+    X_dup = X.vstack([X])
     y = [1, 0]
     skb = SelectKBest(chi2, k=min(top_k, X.shape[1]))
     skb.fit(X_dup, y)
@@ -174,218 +135,112 @@ def extract_tfidf_keywords(text: str, top_k: int = 8, ngram_range=(1,3)) -> list
 
 
 def extract_rake_keywords(text: str, top_k: int = 8) -> list[str]:
+    from rake_nltk import Rake
     rake = Rake(language="romanian")
     rake.extract_keywords_from_text(text)
     return rake.get_ranked_phrases()[:top_k]
 
 
 def extract_yake_keywords(text: str, top_k: int = 8, ngram_max=3) -> list[str]:
+    import yake
     kw_extractor = yake.KeywordExtractor(lan="ro", n=ngram_max, top=top_k)
     keywords = kw_extractor.extract_keywords(text)
-    sorted_phrases = sorted(keywords, key=lambda x: x[1])
-    return [phrase for phrase, score in sorted_phrases]
+    return [phrase for phrase, score in sorted(keywords, key=lambda x: x[1])]
 
 
 def extract_pke_keywords(text: str, top_k: int = 8, method: str = "TextRank") -> list[str]:
-    """
-    Graph-based extraction via pke (TextRank, SingleRank, PositionRank, TopicRank, etc.)
-    """
+    import pke
     extractor_cls = getattr(pke.unsupervised, method)
     extractor = extractor_cls()
     extractor.load_document(input=text, language='ro')
-    extractor.candidate_selection()  # default POS-based selection
+    extractor.candidate_selection()
     extractor.candidate_weighting()
-    keyphrases = extractor.get_n_best(n=top_k)
-    return [kp for kp, _ in keyphrases]
+    return [kp for kp, _ in extractor.get_n_best(n=top_k)]
 
 
-def extract_keybert_keywords(text: str, top_k: int = 8,
-                               model_name: str = 'paraphrase-multilingual-MiniLM-L12-v2') -> list[str]:
-    """
-    Embedding-based extraction using KeyBERT.
-    """
+def extract_keybert_keywords(text: str, top_k: int = 8, model_name: str = 'paraphrase-multilingual-MiniLM-L12-v2') -> list[str]:
+    from sentence_transformers import SentenceTransformer
+    from keybert import KeyBERT
     bert_model = SentenceTransformer(model_name)
     kw_model = KeyBERT(model=bert_model)
-    results = kw_model.extract_keywords(
-        text,
-        keyphrase_ngram_range=(1, 3),
-        stop_words='romanian',
-        top_n=top_k
-    )
-    return [kw for kw, _ in results]
+    return [kw for kw, _ in kw_model.extract_keywords(text, keyphrase_ngram_range=(1,3), stop_words='romanian', top_n=top_k)]
 
 
 def extract_gensim_lda_keywords(text: str, top_k: int = 8, num_topics: int = 1, passes: int = 10) -> list[str]:
-    """
-    Topic modeling via Gensim LDA to extract top topic words.
-    """
+    nlp = _get_nlp()
     tokens = [t.lemma_ for t in nlp(text) if t.is_alpha and not t.is_stop]
+    from gensim import corpora, models
     dictionary = corpora.Dictionary([tokens])
     corpus = [dictionary.doc2bow(tokens)]
-    lda = models.LdaModel(corpus=corpus, id2word=dictionary,
-                          num_topics=num_topics, passes=passes)
-    topics = lda.show_topic(0, topn=top_k)
-    return [word for word, _ in topics]
+    lda = models.LdaModel(corpus=corpus, id2word=dictionary, num_topics=num_topics, passes=passes)
+    return [word for word, _ in lda.show_topic(0, topn=top_k)]
 
 
-def extract_gensim_word2vec_keywords(text: str, top_k: int = 8,
-                                      vector_size: int = 100, window: int = 5, min_count: int = 2) -> list[str]:
-    """
-    Embedding-based extraction via Gensim Word2Vec: find words closest to document centroid.
-    """
+def extract_gensim_word2vec_keywords(text: str, top_k: int = 8, vector_size: int = 100, window: int = 5, min_count: int = 2) -> list[str]:
+    nlp = _get_nlp()
     sentences = [[t.lemma_ for t in sent if t.is_alpha and not t.is_stop] for sent in nlp(text).sents]
-    model = models.word2vec.Word2Vec(sentences, vector_size=vector_size,
-                                     window=window, min_count=min_count)
-    # compute centroid
+    from gensim import models
+    model = models.word2vec.Word2Vec(sentences, vector_size=vector_size, window=window, min_count=min_count)
     centroid = sum(model.wv[w] for sent in sentences for w in sent) / sum(len(sent) for sent in sentences)
-    similar = model.wv.similar_by_vector(centroid, topn=top_k)
-    return [word for word, _ in similar]
+    return [word for word, _ in model.wv.similar_by_vector(centroid, topn=top_k)]
 
-def extract_flashtext_keywords(text: str,
-                               vocabulary: list[str],
-                               case_sensitive: bool = False) -> list[str]:
-    """
-    Use FlashText's KeywordProcessor for O(n) keyword lookup.
-    Returns all vocabulary items found in text (deduped by default, order = appearance).
-    """
+
+def extract_flashtext_keywords(text: str, vocabulary: list[str], case_sensitive: bool = False) -> list[str]:
+    from flashtext import KeywordProcessor
     kp = KeywordProcessor(case_sensitive=case_sensitive)
-    # you can also pass a dict mapping synonyms → normalized form
     for term in vocabulary:
         kp.add_keyword(term)
     found = kp.extract_keywords(text)
-    # FlashText returns duplicates if terms repeat; dedupe while preserving order:
-    seen = set()
-    uniq = []
+    seen, uniq = set(), []
     for kw in found:
         if kw not in seen:
-            seen.add(kw)
-            uniq.append(kw)
+            seen.add(kw); uniq.append(kw)
     return uniq
 
-def dedupe_keywords_fuzzy(keywords: list[str],
-                          threshold: int = 85,
-                          scorer=fuzz.token_set_ratio) -> list[str]:
-    """
-    Remove near‑duplicates from a list by fuzzy similarity.
-    Keeps the first occurrence of each cluster whose similarity ≥ threshold.
-    """
+
+def dedupe_keywords_fuzzy(keywords: list[str], threshold: int = 85) -> list[str]:
+    from thefuzz import fuzz
     deduped = []
     for kw in keywords:
-        if not any(scorer(kw, existing) >= threshold for existing in deduped):
+        if not any(fuzz.token_set_ratio(kw, existing) >= threshold for existing in deduped):
             deduped.append(kw)
     return deduped
 
 
-def generate_keywords(
-    text: str,
-    method: str = "openai",
-    flash_vocab: list[str] | None = None,
-    fuzzy_threshold: int = 85,
-) -> str:
-    """
-    Generate up to 8 keywords for a Romanian legal document.
-
-    Methods:
-      - "openai": GPT-based extraction (default)
-      - "tfidf", "rake", "yake": traditional extractors
-      - "pke": graph-based
-      - "keybert": embedding-based
-      - "lda": topic modeling
-      - "word2vec": embedding-based
-      - "flashtext", "flash_fuzzy": FlashText variants
-    Returns JSON string with schema:
-    {
-      "locatie": ..., "data": ..., "domeniu": ..., "hotarare": ..., "cuvinte_cheie": [...]  
-    }
-    """
+def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] | None = None, fuzzy_threshold: int = 85) -> str:
     cleaned = preprocess_text(text)
     if len(cleaned.split()) < 30:
-        return json.dumps({
-            "locatie": "",
-            "data": "",
-            "domeniu": "",
-            "hotarare": "",
-            "cuvinte_cheie": []
-        }, ensure_ascii=False)
+        return json.dumps({"locatie": "", "data": "", "domeniu": "", "hotarare": "", "cuvinte_cheie": []}, ensure_ascii=False)
 
-    # determine keywords based on method
     if method == "flashtext":
-        if not flash_vocab:
-            raise ValueError("flash_vocab must be provided for flashtext method")
+        if not flash_vocab: raise ValueError("flash_vocab must be provided for flashtext method")
         keywords = extract_flashtext_keywords(cleaned, flash_vocab)
     elif method == "flash_fuzzy":
-        if not flash_vocab:
-            raise ValueError("flash_vocab must be provided for flash_fuzzy method")
-        found = extract_flashtext_keywords(cleaned, flash_vocab)
-        keywords = dedupe_keywords_fuzzy(found, threshold=fuzzy_threshold)
+        if not flash_vocab: raise ValueError("flash_vocab must be provided for flash_fuzzy method")
+        keywords = dedupe_keywords_fuzzy(extract_flashtext_keywords(cleaned, flash_vocab), threshold=fuzzy_threshold)
     elif method == "openai":
-        instruction = (
-            """SYSTEM:
-            You are a highly accurate AI assistant specialized in extracting information from Romanian legal documents.
-
-            USER:
-            From the following decision text in Romanian, always output a valid JSON object with these fields in this order:
-            - locatie (string)
-            - data (string, format \"ZZ.MM.AAAA\")
-            - domeniu (string)
-            - hotarare (string)
-            - cuvinte_cheie (array of up to 8 strings)
-
-            Respond only with the JSON, without markdown formatting.
-
-            Example schema:
-            {
-              "locatie": "…, instanța …",
-              "data": "ZZ.MM.AAAA",
-              "domeniu": "drept penal",
-              "hotarare": "condamnare/acord de recunoaștere etc.",
-              "cuvinte_cheie": [
-                "primul cuvânt",
-                "al doilea cuvânt",
-                "…",
-                "al optulea cuvânt"
-              ]
-            }"""
+        instruction = ("""SYSTEM:\nYou are a highly accurate AI assistant specialized in extracting information from Romanian legal documents.\n\nUSER:\nFrom the following decision text in Romanian..."""
         )
         raw = _generic_completion(cleaned, instruction, DEFAULT_KEYWORD_MODEL).strip()
-        # parse raw JSON
         try:
             result = json.loads(raw)
         except json.JSONDecodeError:
-            # fallback: find JSON block
             match = re.search(r"\{.*\}", raw)
             result = json.loads(match.group(0)) if match else {}
-        # ensure cuvinte_cheie length
         kws = result.get("cuvinte_cheie", [])[:8]
-        # build output
-        return json.dumps({
-            "locatie": result.get("locatie", ""),
-            "data": result.get("data", ""),
-            "domeniu": result.get("domeniu", ""),
-            "hotarare": result.get("hotarare", ""),
-            "cuvinte_cheie": kws
-        }, ensure_ascii=False)
-    elif method in ("tfidf", "rake", "yake"):
-        extractor = {"tfidf": extract_tfidf_keywords, "rake": extract_rake_keywords, "yake": extract_yake_keywords}[method]
-        keywords = extractor(cleaned)
-    elif method == "pke":
-        keywords = extract_pke_keywords(cleaned)
-    elif method == "keybert":
-        keywords = extract_keybert_keywords(cleaned)
-    elif method == "lda":
-        keywords = extract_gensim_lda_keywords(cleaned)
-    elif method == "word2vec":
-        keywords = extract_gensim_word2vec_keywords(cleaned)
+        return json.dumps({"locatie": result.get("locatie",""), "data": result.get("data",""), "domeniu": result.get("domeniu",""), "hotarare": result.get("hotarare",""), "cuvinte_cheie": kws}, ensure_ascii=False)
     else:
-        raise ValueError(f"Unknown extraction method: {method!r}")
+        extractor_map = {
+            "tfidf": extract_tfidf_keywords,
+            "rake": extract_rake_keywords,
+            "yake": extract_yake_keywords,
+            "pke": extract_pke_keywords,
+            "keybert": extract_keybert_keywords,
+            "lda": extract_gensim_lda_keywords,
+            "word2vec": extract_gensim_word2vec_keywords
+        }
+        if method not in extractor_map:
+            raise ValueError(f"Unknown extraction method: {method!r}")
+        keywords = extractor_map[method](cleaned)
 
-    # default return for non-openai: embed keywords only schema
-    return json.dumps({
-        "locatie": "",
-        "data": "",
-        "domeniu": "",
-        "hotarare": "",
-        "cuvinte_cheie": keywords[:8]
-    }, ensure_ascii=False)
-
-
+    return json.dumps({"locatie": "", "data": "", "domeniu": "", "hotarare": "", "cuvinte_cheie": keywords[:8]}, ensure_ascii=False)

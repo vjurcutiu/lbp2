@@ -19,6 +19,12 @@ from routes.file_processing_routes import file_bp
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
 
+# ───> RAG integration imports
+from utils.services.agentic.query_processor import QueryProcessor
+from utils.services.agentic.search_router    import SearchRouter
+from utils.search     import KeywordSearch, VectorSearch
+from utils.keyword_loader import load_keyword_items, build_keyword_topics
+
 
 def configure_logging(app: Flask):
     """Set up Console, File and structlog logging."""
@@ -131,7 +137,22 @@ def create_app(config_object: str = None) -> Flask:
     # Setup services
     notifier     = SocketNotifier(socketio, app)
     ai_service   = OpenAIService()
-    conv_manager = ConversationManager(db.session, ai_service, notifier)
+
+    # ───> Build RAG pipeline in one place
+    with app.app_context():
+        items  = load_keyword_items()
+        topics = build_keyword_topics()
+        
+    keyword_search  = KeywordSearch(items)
+    vector_search = VectorSearch()
+    qp              = QueryProcessor(ai_service, topics)
+    search_router   = SearchRouter(qp, keyword_search, vector_search)
+    conv_manager = ConversationManager(
+        db.session,
+        ai_service,
+        search_router,
+        notifier
+    )
 
     # Configure logging
     configure_logging(app)
