@@ -1,7 +1,7 @@
 import logging
 import re
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 from db.models import File
 
 logger = logging.getLogger(__name__)
@@ -45,39 +45,42 @@ def load_keyword_items() -> List[Dict[str, Any]]:
 
 def build_keyword_topics() -> List[str]:
     """
-    Extract and clean keyword topics from uploaded files' metadata.
-    Returns a deduped, lowercase list of keyword strings.
+    Extracts top-level metadata fields (as lowercase strings)
+    from every File.meta_data['keywords'] JSON blob,
+    excluding 'cuvinte_cheie'.
     """
-    topics: List[str] = []
+    topics: Set[str] = set()
     files = File.query.all()
+
     for f in files:
-        kws_raw = f.meta_data.get("keywords", None)
+        kws_raw: Any = f.meta_data.get("keywords")
         logger.debug("build_keyword_topics: file_id=%s raw_kws=%r", f.id, kws_raw)
         if not kws_raw:
             continue
 
-        # Parse JSON blob if stored as a string
+        # 1) If it's a string, try to pull out the JSON object
         if isinstance(kws_raw, str):
             match = re.search(r"(\{.*\})", kws_raw, re.DOTALL)
-            if match:
-                try:
-                    kw_dict = json.loads(match.group(1))
-                    kws = kw_dict.get("keywords", [])
-                except Exception as e:
-                    logger.warning("Failed to parse keywords for file %s: %s", f.id, e)
-                    continue
-            else:
+            if not match:
                 continue
-        elif isinstance(kws_raw, (list, tuple)):
-            kws = kws_raw
+            try:
+                kw_dict: Dict[str, Any] = json.loads(match.group(1))
+            except json.JSONDecodeError as e:
+                logger.warning("Invalid JSON in file %s: %s", f.id, e)
+                continue
+
+        # 2) If it's already a dict (rare), use it directly
+        elif isinstance(kws_raw, dict):
+            kw_dict = kws_raw
+
+        # 3) Any other type (list, None, etc.) — skip
         else:
             continue
 
-        for value in kws:
-            if isinstance(value, str):
-                topics.append(value)
+        # 4) Add each top-level key (except 'cuvinte_cheie')
+        for key in kw_dict:
+            if key != "cuvinte_cheie":
+                topics.add(key.lower())
 
-    # Deduplicate and normalize
-    clean = {t.strip().lower() for t in topics if isinstance(t, str) and t.strip()}
-    logger.debug("build_keyword_topics: deduped topics=%s", clean)
-    return list(clean)
+    logger.debug("build_keyword_topics: deduped topics=%s", topics)
+    return list(topics)

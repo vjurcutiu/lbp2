@@ -1,5 +1,7 @@
 import os
 import socket
+import sys
+import io
 import logging
 from logging.handlers import RotatingFileHandler
 import structlog
@@ -27,7 +29,7 @@ from utils.keyword_loader import load_keyword_items, build_keyword_topics
 
 
 def configure_logging(app: Flask):
-    """Set up Console, File and structlog logging."""
+    """Set up Console, File and structlog logging with UTF-8 encoding."""
     LOG_DIR = os.path.join(app.instance_path, 'logs')
     os.makedirs(LOG_DIR, exist_ok=True)
     log_file = os.path.join(LOG_DIR, 'app.log')
@@ -36,19 +38,35 @@ def configure_logging(app: Flask):
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
 
-    # Console
+    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
+
+    # Force UTF-8 encoding on Windows consoles (or any stream)
+    if hasattr(console_handler.stream, 'reconfigure'):
+        # Python 3.7+ supports reconfigure
+        console_handler.stream.reconfigure(encoding='utf-8')
+    else:
+        # Wrap fallback
+        console_handler.stream = io.TextIOWrapper(
+            sys.stdout.buffer, encoding='utf-8', errors='replace'
+        )
+
     console_handler.setFormatter(logging.Formatter("%(message)s"))
     root.addHandler(console_handler)
 
-    # Rotating File
-    file_handler = RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=5)
+    # Rotating File handler
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding='utf-8'            # <-- ensure file is UTF-8
+    )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter("%(message)s"))
     root.addHandler(file_handler)
 
-    # structlog
+    # structlog configuration
     structlog.configure(
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),
@@ -110,6 +128,7 @@ def register_cli_commands(app: Flask):
 
 
 def create_app(config_object: str = None) -> Flask:
+    print("💥 create_app() entered")
     """Application factory: creates and configures the Flask app."""
     app = Flask(__name__, instance_relative_config=True)
 
@@ -138,25 +157,28 @@ def create_app(config_object: str = None) -> Flask:
     notifier     = SocketNotifier(socketio, app)
     ai_service   = OpenAIService()
 
+    # Configure logging (now with UTF-8)
+    configure_logging(app)
+    app.logger = structlog.get_logger(__name__).bind(component="app")
+
     # ───> Build RAG pipeline in one place
     with app.app_context():
+        import logging
+        kw_logger = logging.getLogger("keyword_loader")
+        print("keyword_loader handlers:", kw_logger.handlers)
         items  = load_keyword_items()
         topics = build_keyword_topics()
-        
+
     keyword_search  = KeywordSearch(items)
-    vector_search = VectorSearch()
+    vector_search   = VectorSearch()
     qp              = QueryProcessor(ai_service, topics)
     search_router   = SearchRouter(qp, keyword_search, vector_search)
-    conv_manager = ConversationManager(
+    conv_manager    = ConversationManager(
         db.session,
         ai_service,
         search_router,
         notifier
     )
-
-    # Configure logging
-    configure_logging(app)
-    app.logger = structlog.get_logger(__name__).bind(component="app")
 
     # Register blueprints and CLI
     register_blueprints(app, conv_manager)

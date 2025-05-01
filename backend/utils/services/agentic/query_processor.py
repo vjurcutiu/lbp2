@@ -21,8 +21,12 @@ MODE_INSTRUCTION = (
 )
 
 KEYWORD_INSTRUCTION = (
-    "You are an intent classifier. Given a user’s query and a fixed list of topic names, first determine whether the query matches one of the topics. If it does, output the matching topic name followed by the most relevant keyword from the query. If it does not match any topic, output exactly NONE."
-)
+        "Ești un clasificator de intenții. "
+        "Primești o listă fixă de topicuri (hotarare, locatie, data, domeniu) și o interogare în limba română. "
+        "Dacă interogarea se potrivește cu unul din topicuri, răspunde EXACT în format JSON fără alte comentarii:\n"
+        "{ \"topic\": \"<topic>\", \"keyword\": \"<cuvânt_cheie>\" }\n"
+        "Dacă nu se potrivește cu niciun topic, răspunde exact:\n"
+        "NONE")
 
 def identify_intent(
     query: str,
@@ -30,9 +34,9 @@ def identify_intent(
     openai_service: OpenAIService,
     system_instruction: Optional[str] = None,
 ) -> IntentType:
+    logger.debug("identify_intent called with query='%s'", query)
     # Try keyword match
     topic = _llm_extract_keyword(query, keyword_topics, openai_service, system_instruction=system_instruction)
-        
     if topic:
         logger.debug("identify_intent: matched keyword topic=%s", topic)
         return 'keyword', topic
@@ -41,10 +45,11 @@ def identify_intent(
     instruction = system_instruction or DEFAULT_INTENT_INSTRUCTION
     response = _ask_llm(query, openai_service, instruction)
     intent = response.lower().strip()
+    logger.debug("identify_intent: llm returned intent=%s", intent)
     if intent in ('semantic', 'conversational'):
         return intent, None  # type: ignore
     logger.warning("identify_intent: unexpected intent=%s, defaulting to semantic", intent)
-    return 'semantic'
+    return 'semantic', None  # type: ignore
 
 
 def decide_mode(
@@ -52,9 +57,11 @@ def decide_mode(
     openai_service: OpenAIService,
     system_instruction: Optional[str] = None,
 ) -> Literal['keyword', 'semantic']:
+    logger.debug("decide_mode called with query='%s'", query)
     instruction = system_instruction or MODE_INSTRUCTION
     response = _ask_llm(query, openai_service, instruction)
     mode = response.lower().strip()
+    logger.debug("decide_mode: llm returned mode=%s", mode)
     if mode in ('keyword', 'semantic'):
         return mode  # type: ignore
     logger.warning("decide_mode: unexpected mode=%s, defaulting to semantic", mode)
@@ -67,11 +74,13 @@ def _llm_extract_keyword(
     openai_service: OpenAIService,
     system_instruction: Optional[str] = None,
 ) -> Optional[str]:
+    logger.debug("_llm_extract_keyword called with query='%s'", query)
     instruction = system_instruction or KEYWORD_INSTRUCTION
     topics_str = ", ".join(keyword_topics)
     prompt = f"Topics: {topics_str}\nQuery: \"{query}\"\nAnswer with one topic or NONE."
     response = _ask_llm_raw(prompt, openai_service, instruction)
     normalized = response.strip().lower()
+    logger.debug("_llm_extract_keyword: llm returned topic candidate=%s", normalized)
     for topic in keyword_topics:
         if normalized == topic.lower():
             return topic
@@ -83,6 +92,7 @@ def _ask_llm(
     openai_service: OpenAIService,
     system_instruction: str,
 ) -> str:
+    logger.debug("_ask_llm sending payload for query='%s'", query)
     payload = ChatPayload(
         model=openai_service.model_map['chat'],
         messages=[
@@ -94,7 +104,9 @@ def _ask_llm(
         top_p=1.0,
     )
     try:
-        return openai_service.chat(payload)
+        result = openai_service.chat(payload)
+        logger.debug("_ask_llm received response=%s", result)
+        return result
     except OpenAIAPIError as e:
         logger.error("LLM call failed: %s", e)
         raise
@@ -105,6 +117,7 @@ def _ask_llm_raw(
     openai_service: OpenAIService,
     system_instruction: str,
 ) -> str:
+    logger.debug("_ask_llm_raw sending prompt=%s", prompt)
     payload = ChatPayload(
         model=openai_service.model_map['chat'],
         messages=[
@@ -115,16 +128,22 @@ def _ask_llm_raw(
         temperature=0,
         top_p=1.0,
     )
+    logger.debug("_ask_llm_raw sending payload=%s", payload)
+
     try:
-        return openai_service.chat(payload)
+        result = openai_service.chat(payload)
+        logger.debug("_ask_llm_raw received response=%s", result)
+        return result
     except OpenAIAPIError:
+        logger.error("_ask_llm_raw failed for prompt=%s", prompt)
         return ""
 
 
 def process_keyword_results(
     raw_items: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    return [
+    logger.debug("process_keyword_results called with %d items", len(raw_items))
+    processed = [
         {
             "id": item["id"],
             "score": None,
@@ -135,32 +154,47 @@ def process_keyword_results(
         }
         for item in raw_items
     ]
+    logger.debug("process_keyword_results returning %d processed items", len(processed))
+    return processed
 
 
 def process_semantic_results(
     semantic_output: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
-    return semantic_output.get("results", [])
+    results = semantic_output.get("results", [])
+    logger.debug("process_semantic_results returning %d results", len(results))
+    return results
 
 class QueryProcessor:
     def __init__(self, ai_service: OpenAIService, keyword_topics: List[str]):
+        logger.debug("Initializing QueryProcessor with topics=%s", keyword_topics)
         self.ai = ai_service
         self.keyword_topics = keyword_topics
 
     def identify_intent(self, query: str) -> Tuple[Literal['keyword','semantic','conversational'], Optional[str]]:
-        # re-use your free function
+        logger.debug("QueryProcessor.identify_intent called with query='%s'", query)
         intent, topic = identify_intent(
             query=query,
             keyword_topics=self.keyword_topics,
             openai_service=self.ai,
         )
+        logger.info("Decision made in identify_intent: intent=%s, topic=%s", intent, topic)
         return intent, topic
 
     def decide_mode(self, query: str) -> Literal['keyword','semantic']:
-        return decide_mode(query, self.ai)
+        logger.debug("QueryProcessor.decide_mode called with query='%s'", query)
+        mode = decide_mode(query, self.ai)
+        logger.info("Decision made in decide_mode: mode=%s", mode)
+        return mode
 
     def process_keyword_results(self, raw_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return process_keyword_results(raw_items)
+        logger.debug("QueryProcessor.process_keyword_results called")
+        results = process_keyword_results(raw_items)
+        logger.info("Processed %d keyword results", len(results))
+        return results
 
     def process_semantic_results(self, semantic_output: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return process_semantic_results(semantic_output)
+        logger.debug("QueryProcessor.process_semantic_results called")
+        results = process_semantic_results(semantic_output)
+        logger.info("Processed %d semantic results", len(results))
+        return results
