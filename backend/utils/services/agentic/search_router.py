@@ -1,11 +1,10 @@
-# search_router.py
-
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from utils.models.chat_payload import ChatPayload
 from utils.services.ai_api_manager import OpenAIService
-from utils.search import KeywordSearch, VectorSearch
+from utils.search import VectorSearch, KeywordSearch
+
 
 from .query_processor import QueryProcessor   # <- relative import
 
@@ -15,36 +14,52 @@ class SearchRouter:
     def __init__(
         self,
         query_processor: QueryProcessor,
-        keyword_search: KeywordSearch,
         semantic_search: VectorSearch,
+        keyword_search: KeywordSearch,
+        force_semantic: bool = True  # Temporary bypass flag
     ):
         self.qp = query_processor
-        self.keyword_search = keyword_search
         self.semantic_search = semantic_search
+        self.force_semantic = force_semantic
 
     def search(self, query: str) -> Dict[str, Any]:
-        intent, topic = self.qp.identify_intent(query)
-        logger.debug("search_router: intent=%s, topic=%s", intent, topic)
+        """
+        Routes to semantic or intent-based search.
+        If force_semantic is True, always uses semantic search.
+        """
+        logger.debug("search_router: search called with query=%s, force_semantic=%s", query, self.force_semantic)
 
-        if intent == 'keyword' and topic:
-            raw = self.keyword_search.search(topic)
-            results = self.qp.process_keyword_results(raw)
-            return {
-                'intent': 'keyword',
-                'topic': topic,
-                'results': results,
-            }
-
-        if intent == 'semantic':
-            sem = self.semantic_search.search(query)
-            results = self.qp.process_semantic_results(sem)
+        if self.force_semantic:
+            # Temporary bypass: always semantic
+            logger.debug("search_router: forced semantic search for query=%s", query)
+            sem_results = self.semantic_search.search(query)
+            results = self.qp.process_semantic_results(sem_results)
             return {
                 'intent': 'semantic',
                 'results': results,
             }
 
-        # conversational fallback
-        return self._conversational_fallback(query)
+        # Default behavior: determine intent then route
+        intent = self.qp.detect_intent(query)
+        logger.debug("search_router: detected intent '%s' for query=%s", intent, query)
+
+        if intent == 'semantic':
+            sem_results = self.semantic_search.search(query)
+            results = self.qp.process_semantic_results(sem_results)
+            return {
+                'intent': 'semantic',
+                'results': results,
+            }
+        elif intent == 'conversational':
+            return self._conversational_fallback(query)
+        else:
+            # Keyword or other
+            kw_results = self.qp.keyword_search(query)
+            results = self.qp.process_keyword_results(kw_results)
+            return {
+                'intent': intent,
+                'results': results,
+            }
 
     def _conversational_fallback(self, query: str) -> Dict[str, Any]:
         system_instruction = (
