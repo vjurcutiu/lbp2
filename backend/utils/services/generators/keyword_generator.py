@@ -10,7 +10,9 @@ except ImportError:
         pass
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-# Lazy-loaded NLP model placeholder\_nlp = None
+#Lazy-loaded NLP model 
+placeholder_nlp = None
+
 DEFAULT_KEYWORD_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
 
 # -----------------------------------------------------------------------------

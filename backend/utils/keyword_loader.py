@@ -16,7 +16,8 @@ def load_keyword_items() -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
     files = File.query.filter_by(is_uploaded=True).all()
     for f in files:
-        kws_raw = f.meta_data.get("keywords", [])
+        metadata = f.meta_data or {}
+        kws_raw   = metadata.get("keywords", [])
         logger.debug("load_keyword_items: file_id=%s raw_kws=%r", f.id, kws_raw)
 
         # Parse JSON blob if stored as a string
@@ -53,7 +54,8 @@ def build_keyword_topics() -> List[str]:
     files = File.query.all()
 
     for f in files:
-        kws_raw: Any = f.meta_data.get("keywords")
+        metadata = f.meta_data or {}
+        kws_raw: Any = metadata.get("keywords")
         logger.debug("build_keyword_topics: file_id=%s raw_kws=%r", f.id, kws_raw)
         if not kws_raw:
             continue

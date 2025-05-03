@@ -4,6 +4,8 @@ from utils.pinecone_client import PineconeClient
 from sqlalchemy import or_
 from flask import current_app
 import logging
+from PyPDF2 import PdfReader
+import docx
 
 # Use the new AI API manager wrapper
 from utils.services.ai_api_manager import OpenAIService
@@ -110,39 +112,55 @@ def scan_and_add_files_wrapper(paths, extension, conversation_id=None, progress_
     else:
         return scan_and_add_files(paths, extension, conversation_id, progress_callback)
 
-
 def extract_text_from_file(file_path):
+    func = "extract_text_from_file"
     _, extension = os.path.splitext(file_path)
     extension = extension.lower()
 
+    current_app.logger.debug(f"[{func}] starting. path={file_path}, ext={extension}")
     if extension in ['.txt', '.md', '.csv']:
         try:
+            current_app.logger.debug(f"[{func}] Reading as plain text: {file_path}")
             with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            current_app.logger.error(f"Error reading {file_path}: {e}")
-            return ""
-    elif extension == '.pdf':
-        try:
-            from PyPDF2 import PdfReader
-            reader = PdfReader(file_path)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() or ""
+                text = f.read()
+            current_app.logger.debug(f"[{func}] Read {len(text)} characters from text file")
             return text
         except Exception as e:
-            current_app.logger.error(f"Error extracting text from PDF {file_path}: {e}")
+            current_app.logger.error(f"[{func}] Error reading {file_path}: {e}", exc_info=True)
             return ""
+
+    elif extension == '.pdf':
+        try:
+            current_app.logger.debug(f"[{func}] Reading PDF: {file_path}")
+            reader = PdfReader(file_path)
+            text = ""
+            current_app.logger.debug(f"[{func}] PDF has {len(reader.pages)} pages")
+            for i, page in enumerate(reader.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text
+                    current_app.logger.debug(f"[{func}] Extracted {len(page_text)} chars from page {i}")
+                else:
+                    current_app.logger.warning(f"[{func}] No text found on page {i} of {file_path}")
+            current_app.logger.debug(f"[{func}] Total PDF text length: {len(text)} chars")
+            return text
+        except Exception as e:
+            current_app.logger.error(f"[{func}] Error extracting text from PDF {file_path}: {e}", exc_info=True)
+            return ""
+
     elif extension in ['.doc', '.docx']:
         try:
-            import docx
+            current_app.logger.debug(f"[{func}] Reading Word doc: {file_path}")
             doc = docx.Document(file_path)
-            return "\n".join([para.text for para in doc.paragraphs])
+            full_text = "\n".join([para.text for para in doc.paragraphs])
+            current_app.logger.debug(f"[{func}] Extracted {len(full_text)} characters from Word document")
+            return full_text
         except Exception as e:
-            current_app.logger.error(f"Error extracting text from Word document {file_path}: {e}")
+            current_app.logger.error(f"[{func}] Error extracting text from Word document {file_path}: {e}", exc_info=True)
             return ""
+
     else:
-        current_app.logger.warning(f"Unsupported file extension: {extension} for file {file_path}")
+        current_app.logger.warning(f"[{func}] Unsupported file extension: {extension} for file {file_path}")
         return ""
 
 
@@ -215,10 +233,34 @@ def process_files_for_metadata(type='keywords', progress_callback=None):
         current_app.logger.error(f"Error committing metadata: {e}")
     return results
 
-
-def upsert_files_to_vector_db(progress_callback=None):
+def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 400) -> list[str]:
     """
-    Upserts embeddings for files with metadata to Pinecone and marks them uploaded.
+    Splits `text` into chunks of up to `chunk_size` characters with `overlap` characters between chunks.
+    Returns a list of text chunks.
+    """
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap must be non-negative and less than chunk_size")
+
+    chunks = []
+    start = 0
+    text_length = len(text)
+    while start < text_length:
+        end = min(start + chunk_size, text_length)
+        chunks.append(text[start:end])
+        # advance start by chunk_size minus overlap
+        start += chunk_size - overlap
+    return chunks
+
+
+def upsert_files_to_vector_db(chunk_size: int = 500,
+                              overlap: int = 200,
+                              progress_callback=None):
+    """
+    Upserts embeddings for files with metadata to Pinecone in text chunks and marks them uploaded.
+
+    Each file is split into overlapping chunks by character count, then each chunk is embedded and upserted.
     """
     to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
     current_app.logger.info(f"Files to upsert: {[f.file_path for f in to_upsert]}")
@@ -230,29 +272,45 @@ def upsert_files_to_vector_db(progress_callback=None):
     client = PineconeClient()
 
     for f in to_upsert:
-        if os.path.exists(f.file_path):
-            text = extract_text_from_file(f.file_path)
-            if text:
-                retrieval = f"Represent this document for searching relevant passages: {text}"
-                try:
-                    # Use manager for embeddings
-                    embeddings = aii.embeddings(retrieval)
-                    if embeddings:
-                        record = {
-                            'id': str(f.id),
-                            'values': embeddings,
-                            'metadata': {'source_text': text,
-                                         'keywords': f.meta_data.get('keywords', [])}
-                        }
-                        vc_resp = client.upsert(vectors=[record], namespace=namespace)
-                        f.is_uploaded = True
-                        results.append({'file_path': f.file_path, 'vector_response': vc_resp})
-                    else:
-                        current_app.logger.error(f"No embeddings for {f.file_path}")
-                except Exception as e:
-                    current_app.logger.error(f"Error upserting {f.file_path}: {e}")
-        else:
+        if not os.path.exists(f.file_path):
             current_app.logger.warning(f"File not found: {f.file_path}")
+            count += 1
+            if progress_callback:
+                progress_callback(count, total)
+            continue
+
+        text = extract_text_from_file(f.file_path)
+        if not text:
+            current_app.logger.error(f"No text extracted from {f.file_path}")
+            count += 1
+            if progress_callback:
+                progress_callback(count, total)
+            continue
+
+        chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+        current_app.logger.info(f"Split {f.file_path} into {len(chunks)} chunks")
+
+        for idx, chunk in enumerate(chunks):
+            prompt = f"Represent this document chunk for searching relevant passages: {chunk}"
+            try:
+                # Use public embeddings method
+                embeddings = aii.embeddings(prompt)
+                record = {
+                    'id': f"{f.id}_chunk_{idx}",
+                    'values': embeddings,
+                    'metadata': {
+                        'source_file': f.file_path,
+                        'chunk_index': idx,
+                        'text_snippet': chunk[:100]
+                    }
+                }
+                vc_resp = client.upsert(vectors=[record], namespace=namespace)
+                results.append({'file_path': f.file_path, 'chunk': idx, 'vector_response': vc_resp})
+            except Exception as e:
+                current_app.logger.error(f"Error upserting chunk {idx} of {f.file_path}: {e}", exc_info=True)
+
+        # After all chunks upserted, mark file as uploaded
+        f.is_uploaded = True
         count += 1
         if progress_callback:
             progress_callback(count, total)
@@ -264,3 +322,4 @@ def upsert_files_to_vector_db(progress_callback=None):
         current_app.logger.error(f"Error committing vector upload flags: {e}")
 
     return results
+

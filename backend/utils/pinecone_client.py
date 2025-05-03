@@ -1,6 +1,9 @@
 import os
 from typing import List, Dict, Optional, Any
 from pinecone import Pinecone
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PineconeClient:
     def __init__(
@@ -54,7 +57,13 @@ class PineconeClient:
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i : i + batch_size]
             # v3 API: upsert directly on the Index instance
-            resp_part = self.index.upsert(vectors=batch, namespace=ns)
+            resp_part = self.index.upsert_records(vectors=batch, namespace=ns)
+            logger.debug(
+                "[%s.upsert] before update: resp=%r, resp_part=%r",
+                self.__class__.__name__,
+                resp,
+                resp_part,
+            )
             resp.update(resp_part)
         return resp
 

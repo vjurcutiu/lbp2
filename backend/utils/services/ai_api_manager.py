@@ -150,7 +150,7 @@ class OpenAIService:
         except Exception as e:
             self.logger.error("Summarization failed", exc_info=True)
             raise OpenAIAPIError("Summarization failed") from e
-
+    
     def keywords(self, text: str) -> str:
         """
         Generate keywords in Romanian for a legal document.
@@ -161,6 +161,7 @@ class OpenAIService:
         except Exception as e:
             self.logger.error("Keyword extraction failed", exc_info=True)
             raise OpenAIAPIError("Keyword extraction failed") from e
+    
 
     def generate_title(self, text: str) -> str:
         """
