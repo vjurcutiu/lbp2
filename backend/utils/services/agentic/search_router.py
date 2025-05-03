@@ -14,11 +14,12 @@ class SearchRouter:
     def __init__(
         self,
         query_processor: QueryProcessor,
-        semantic_search: VectorSearch,
         keyword_search: KeywordSearch,
+        semantic_search: VectorSearch,
         force_semantic: bool = True  # Temporary bypass flag
     ):
         self.qp = query_processor
+        self.keyword_search = keyword_search
         self.semantic_search = semantic_search
         self.force_semantic = force_semantic
 
