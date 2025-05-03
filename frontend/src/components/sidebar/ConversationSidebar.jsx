@@ -107,7 +107,7 @@ const ConversationSidebar = () => {
       // Start processing and get session info + promise
       const { sessionId, eventSource, resultPromise } = await processFolder(
         folderPath,
-        ".txt",
+        ['.txt', '.pdf'],
         (progress) => setUploadProgress(progress)
       );
 

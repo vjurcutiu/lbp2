@@ -2,11 +2,11 @@
 
 import apiClient, { createSSEConnection } from './apiClient';
 
-export const processFolder = async (folderPath, extension = ".txt", onProgress) => {
+export const processFolder = async (folderPath, extension, onProgress) => {
   // 1) Kick off the job and get a session ID
   const { sessionId } = await apiClient.post('/files/process_folder', {
     folder_path: folderPath,
-    extension: extension || ".txt"
+    extensions: extension || ".txt"
   });
   if (!sessionId) throw new Error('Missing session ID in response.');
 

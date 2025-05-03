@@ -24,18 +24,24 @@ def truncate_words(text: str, limit: int = 20) -> str:
     return " ".join(words[:limit]) + "..."
 
 
-def scan_and_add_files(path, extension, conversation_id=None, progress_callback=None):
+def scan_and_add_files(path, extensions, conversation_id=None, progress_callback=None):
     added_files = []
     skipped_files = []
     total_files = 0
     processed_files = 0
 
-    # First pass to count files
+    # Normalize extensions to a list of lowercase strings
+    if isinstance(extensions, str):
+        extensions = [extensions]
+    exts = [ext.lower() for ext in extensions]
+
+    # First pass to count files matching any of the exts
     if os.path.isfile(path):
-        total_files = 1
+        total_files = 1 if any(path.lower().endswith(ext) for ext in exts) else 0
     elif os.path.isdir(path):
-        for root, dirs, files in os.walk(path):
-            total_files += len([f for f in files if f.lower().endswith(extension.lower())])
+        for _, _, files in os.walk(path):
+            total_files += sum(1 for f in files if any(f.lower().endswith(ext) for ext in exts))
+
 
     def update_progress():
         nonlocal processed_files
@@ -44,9 +50,7 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
             progress = int((processed_files / total_files) * 100)
             progress_callback(progress)
 
-    if os.path.isfile(path):
-        # Process a single file
-        if path.lower().endswith(extension.lower()):
+    if os.path.isfile(path) and any(path.lower().endswith(ext) for ext in exts):
             full_path = os.path.abspath(path)
             existing_file = File.query.filter_by(file_path=full_path).first()
             if existing_file:
@@ -63,26 +67,27 @@ def scan_and_add_files(path, extension, conversation_id=None, progress_callback=
                 db.session.add(new_file)
                 added_files.append(full_path)
     elif os.path.isdir(path):
-        # Process all files in the directory
+        # Process all files in the directory matching any ext
         for root, dirs, files in os.walk(path):
             for filename in files:
-                if filename.lower().endswith(extension.lower()):
-                    full_path = os.path.join(root, filename)
-                    existing_file = File.query.filter_by(file_path=full_path).first()
-                    if existing_file:
-                        skipped_files.append(full_path)
-                        continue
+                if not any(filename.lower().endswith(ext) for ext in exts):
+                    continue
+                full_path = os.path.join(root, filename)
+                existing_file = File.query.filter_by(file_path=full_path).first()
+                if existing_file:
+                    skipped_files.append(full_path)
+                    continue
 
-                    _, file_ext = os.path.splitext(filename)
-                    new_file = File(
-                        file_path=full_path,
-                        file_extension=file_ext,
-                        conversation_id=conversation_id,
-                        is_uploaded=False,
-                        meta_data=None
-                    )
-                    db.session.add(new_file)
-                    added_files.append(full_path)
+                _, file_ext = os.path.splitext(filename)
+                new_file = File(
+                    file_path=full_path,
+                    file_extension=file_ext,
+                    conversation_id=conversation_id,
+                    is_uploaded=False,
+                    meta_data=None
+                )
+                db.session.add(new_file)
+                added_files.append(full_path)
     else:
         raise Exception("Invalid path provided.")
 
@@ -304,7 +309,7 @@ def upsert_files_to_vector_db(chunk_size: int = 500,
                         'text_snippet': chunk[:100]
                     }
                 }
-                vc_resp = client.upsert(vectors=[record], namespace=namespace)
+                vc_resp = client.upsert([record], namespace)
                 results.append({'file_path': f.file_path, 'chunk': idx, 'vector_response': vc_resp})
             except Exception as e:
                 current_app.logger.error(f"Error upserting chunk {idx} of {f.file_path}: {e}", exc_info=True)
