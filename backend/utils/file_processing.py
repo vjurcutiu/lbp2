@@ -304,6 +304,7 @@ def upsert_files_to_vector_db(chunk_size: int = 500,
                     'id': f"{f.id}_chunk_{idx}",
                     'values': embeddings,
                     'metadata': {
+                        'source_text': chunk,
                         'source_file': f.file_path,
                         'chunk_index': idx,
                         'text_snippet': chunk[:100]
@@ -327,4 +328,3 @@ def upsert_files_to_vector_db(chunk_size: int = 500,
         current_app.logger.error(f"Error committing vector upload flags: {e}")
 
     return results
-

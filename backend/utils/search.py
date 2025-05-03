@@ -3,7 +3,7 @@ import logging
 from typing import Optional, Dict, Any, List
 import json
 
-from utils.ai_apis import send_to_api, openai_api_logic
+from utils.services.ai_api_manager import OpenAIService
 from utils.pinecone_client import PineconeClient
 
 # Configure module-level defaults from environment
@@ -14,18 +14,18 @@ DEFAULT_THRESHOLD = float(os.getenv("RAG_THRESHOLD", 0.7))
 
 class Embedder:
     """
-    A simple embedding interface. Uses OpenAI API via send_to_api().
+    A simple embedding interface. Uses OpenAIService for embeddings.
     """
     def __init__(self, model: Optional[str] = None):
         self.model = model or DEFAULT_EMBEDDING_MODEL
+        self.ai_service = OpenAIService()
 
     def embed(self, text: str) -> List[float]:
         """
         Returns an embedding vector for the given text.
         """
-        prompt = f"Represent this sentence for searching relevant passages: {text}"
         try:
-            return send_to_api(prompt, openai_api_logic, purpose="embeddings")
+            return self.ai_service.embeddings(text)
         except Exception as e:
             logging.error("Embedder.embed failed: %s", e, exc_info=True)
             raise
