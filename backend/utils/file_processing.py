@@ -263,6 +263,23 @@ def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 400) -> list[st
     return chunks
 
 
+import json
+
+def flatten_values(data):
+    """
+    Recursively extract all values from nested dicts and lists into a flat list.
+    """
+    values = []
+    if isinstance(data, dict):
+        for v in data.values():
+            values.extend(flatten_values(v))
+    elif isinstance(data, list):
+        for item in data:
+            values.extend(flatten_values(item))
+    else:
+        values.append(data)
+    return values
+
 def upsert_files_to_vector_db(chunk_size: int = 1500,
                               overlap: int = 200,
                               progress_callback=None):
@@ -301,16 +318,33 @@ def upsert_files_to_vector_db(chunk_size: int = 1500,
 
         # Prepare metadata to include keywords and other file metadata if available
         file_metadata = f.meta_data if isinstance(f.meta_data, dict) else {}
-        keywords = file_metadata.get('keywords') or file_metadata.get('keywords'.replace('_', '')) or file_metadata.get('keywords'.replace(' ', '')) or file_metadata.get('keywords'.lower()) or file_metadata.get('keywords'.upper())
-        # Fallback to 'keywords' key as in file_processing.py it is 'keywords' key
-        keywords = file_metadata.get('keywords', None)
-        # Ensure keywords is a string or list, convert to string if list
-        if isinstance(keywords, list):
-            keywords_str = ", ".join(keywords)
-        elif isinstance(keywords, str):
-            keywords_str = keywords
-        else:
-            keywords_str = ""
+
+        # Flatten all relevant metadata values into keywords list
+        raw_keywords = []
+
+        # Keys to extract values from, excluding 'cuvinte_cheie'
+        keys_to_extract = ['locatie', 'data', 'domeniu', 'hotarare', 'keywords']
+
+        for key in keys_to_extract:
+            val = file_metadata.get(key)
+            current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Processing metadata key '{key}': {val}")
+            if val:
+                # If val is a string that looks like JSON, parse it
+                if isinstance(val, str):
+                    try:
+                        parsed_val = json.loads(val)
+                        current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Parsed JSON string for key '{key}': {parsed_val}")
+                        val = parsed_val
+                    except Exception:
+                        # Not a JSON string, keep as is
+                        pass
+                # Flatten values recursively
+                flattened = flatten_values(val)
+                current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Flattened values for key '{key}': {flattened}")
+                raw_keywords.extend(flattened)
+
+        # Deduplicate and normalize keywords
+        unique_keywords = list({str(k).lower() for k in raw_keywords if k})
 
         for idx, chunk in enumerate(chunks):
             prompt = f"Represent this document chunk for searching relevant passages: {chunk}"
@@ -325,11 +359,10 @@ def upsert_files_to_vector_db(chunk_size: int = 1500,
                         'source_file': f.file_path,
                         'chunk_index': idx,
                         'text_snippet': chunk[:100],
-                        'keywords': keywords_str,
-                        # Include all other metadata fields flattened except keywords
-                        **{k: v for k, v in file_metadata.items() if k != 'keywords'}
+                        'keywords': unique_keywords
                     }
                 }
+                current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Upserting chunk {idx} of file {f.file_path} with metadata keywords: {unique_keywords}")
                 vc_resp = client.upsert([record], namespace)
                 results.append({'file_path': f.file_path, 'chunk': idx, 'vector_response': vc_resp})
             except Exception as e:

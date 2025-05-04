@@ -16,7 +16,7 @@ class SearchRouter:
         query_processor: QueryProcessor,
         keyword_search: KeywordSearch,
         semantic_search: VectorSearch,
-        force_semantic: bool = True  # Temporary bypass flag
+        force_semantic: bool = False  # Disable forced semantic to allow keyword extraction
     ):
         self.qp = query_processor
         self.keyword_search = keyword_search
@@ -25,13 +25,12 @@ class SearchRouter:
 
     def search(self, query: str) -> Dict[str, Any]:
         """
-        Routes to semantic or intent-based search.
-        If force_semantic is True, always uses semantic search.
+        Routes to semantic or keyword-based search.
+        Attempts keyword extraction and passes keywords to hybrid search.
         """
         logger.debug("search_router: search called with query=%s, force_semantic=%s", query, self.force_semantic)
 
         if self.force_semantic:
-            # Temporary bypass: always semantic
             logger.debug("search_router: forced semantic search for query=%s", query)
             sem_results = self.semantic_search.search(query)
             results = self.qp.process_semantic_results(sem_results)
@@ -40,25 +39,22 @@ class SearchRouter:
                 'results': results,
             }
 
-        # Default behavior: determine intent then route
-        intent = self.qp.detect_intent(query)
-        logger.debug("search_router: detected intent '%s' for query=%s", intent, query)
-
-        if intent == 'semantic':
+        # Extract keywords using QueryProcessor
+        keywords = self.qp.extract_keywords(query)
+        if keywords:
+            logger.debug("search_router: extracted keywords %s for query=%s", keywords, query)
+            results = self.semantic_search.search(query, keywords=keywords)
+            processed_results = self.qp.process_semantic_results(results)
+            return {
+                'intent': 'hybrid',
+                'results': processed_results,
+            }
+        else:
+            logger.debug("search_router: no keywords extracted, performing semantic search for query=%s", query)
             sem_results = self.semantic_search.search(query)
             results = self.qp.process_semantic_results(sem_results)
             return {
                 'intent': 'semantic',
-                'results': results,
-            }
-        elif intent == 'conversational':
-            return self._conversational_fallback(query)
-        else:
-            # Keyword or other
-            kw_results = self.qp.keyword_search(query)
-            results = self.qp.process_keyword_results(kw_results)
-            return {
-                'intent': intent,
                 'results': results,
             }
 

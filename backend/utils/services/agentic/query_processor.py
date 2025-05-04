@@ -74,15 +74,24 @@ def _llm_extract_keyword(
     openai_service: OpenAIService,
     system_instruction: Optional[str] = None,
 ) -> Optional[str]:
+    import json as jsonlib
     logger.debug("_llm_extract_keyword called with query='%s'", query)
     instruction = system_instruction or KEYWORD_INSTRUCTION
     topics_str = ", ".join(keyword_topics)
     prompt = f"Topics: {topics_str}\nQuery: \"{query}\"\nAnswer with one topic or NONE."
     response = _ask_llm_raw(prompt, openai_service, instruction)
-    normalized = response.strip().lower()
+    normalized = response.strip()
     logger.debug("_llm_extract_keyword: llm returned topic candidate=%s", normalized)
+    try:
+        data = jsonlib.loads(normalized)
+        keyword = data.get("keyword")
+        if keyword:
+            return keyword
+    except Exception as e:
+        logger.warning("_llm_extract_keyword: failed to parse JSON response: %s", e)
+    # Fallback: check if response matches any topic string
     for topic in keyword_topics:
-        if normalized == topic.lower():
+        if normalized.lower() == topic.lower():
             return topic
     return None
 
@@ -186,6 +195,23 @@ class QueryProcessor:
         mode = decide_mode(query, self.ai)
         logger.info("Decision made in decide_mode: mode=%s", mode)
         return mode
+
+    def extract_keywords(self, query: str) -> List[str]:
+        """
+        Extract keywords from the query based on the configured keyword topics.
+        Returns a list of keywords (empty if none found).
+        """
+        logger.debug("QueryProcessor.extract_keywords called with query='%s'", query)
+        keywords = []
+        for topic in self.keyword_topics:
+            # Use the existing _llm_extract_keyword function to check if query matches topic
+            keyword = _llm_extract_keyword(query, [topic], self.ai)
+            if keyword and keyword.upper() != "NONE":
+                keywords.append(keyword.lower())
+        # Deduplicate keywords
+        unique_keywords = list(set(keywords))
+        logger.info("Extracted keywords (deduplicated): %s", unique_keywords)
+        return unique_keywords
 
     def process_keyword_results(self, raw_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         logger.debug("QueryProcessor.process_keyword_results called")

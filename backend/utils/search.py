@@ -243,18 +243,24 @@ class HybridSearch:
             A dict with a "results" list, each item containing id, score,
             keywords, summary, and text.
         """
+        logging.debug("HybridSearch.search called with query=%s, keywords=%s, index_name=%s, namespace=%s, top_k=%s, threshold=%s",
+                      query, keywords, index_name, namespace, top_k, threshold)
+
         # Embed the query
         try:
             vector = self.embedder.embed(query)
+            logging.debug("HybridSearch: Query embedding generated successfully.")
         except Exception:
+            logging.error("HybridSearch: Failed to generate embedding for query.", exc_info=True)
             raise RuntimeError("Failed to generate embedding for query.")
 
         # Lazy-load vector store
         if not self.vector_store:
             try:
                 self.vector_store = PineconeClient()
+                logging.debug("HybridSearch: PineconeClient initialized successfully.")
             except Exception as e:
-                logging.error("PineconeClient init failed: %s", e, exc_info=True)
+                logging.error("HybridSearch: PineconeClient init failed: %s", e, exc_info=True)
                 raise RuntimeError("Failed to initialize Pinecone client: " + str(e))
 
         vs = self.vector_store
@@ -263,10 +269,15 @@ class HybridSearch:
         k = top_k or self.top_k
         t = threshold or self.threshold
 
+        logging.debug("HybridSearch: Using index_name=%s, namespace=%s, top_k=%d, threshold=%.3f", idx, ns, k, t)
+
         # Prepare filter for keyword search if keywords provided
         filter_dict = None
         if keywords:
             filter_dict = {"keywords": {"$in": keywords}}
+            logging.debug("HybridSearch: Keyword filter prepared: %s", filter_dict)
+        else:
+            logging.debug("HybridSearch: No keywords provided, skipping keyword filter.")
 
         # Query 1: Semantic search without filter
         try:
@@ -277,8 +288,9 @@ class HybridSearch:
                 include_values=False,
                 include_metadata=True,
             )
+            logging.debug("HybridSearch: Semantic search query successful, %d matches found.", len(semantic_response.get("matches", [])))
         except Exception as e:
-            logging.error("Vector store semantic query failed: %s", e, exc_info=True)
+            logging.error("HybridSearch: Vector store semantic query failed: %s", e, exc_info=True)
             raise RuntimeError(f"Vector store semantic query error: {e}")
 
         semantic_matches = semantic_response.get("matches", [])
@@ -296,8 +308,9 @@ class HybridSearch:
                     include_metadata=True,
                 )
                 keyword_matches = keyword_response.get("matches", [])
+                logging.debug("HybridSearch: Keyword filtered search query successful, %d matches found.", len(keyword_matches))
             except Exception as e:
-                logging.error("Vector store keyword filtered query failed: %s", e, exc_info=True)
+                logging.error("HybridSearch: Vector store keyword filtered query failed: %s", e, exc_info=True)
                 # Proceed without keyword matches if error occurs
 
         # Merge and boost scores for items appearing in both results
@@ -313,6 +326,7 @@ class HybridSearch:
                     "summary": match.get("metadata", {}).get("summary", ""),
                     "text": match.get("metadata", {}).get("source_text", ""),
                 }
+        logging.debug("HybridSearch: %d semantic matches passed threshold %.3f.", len(merged_dict), t)
 
         for match in keyword_matches:
             if match.get("score", 0) < t:
@@ -321,6 +335,7 @@ class HybridSearch:
             if mid in merged_dict:
                 # Boost score for dual match
                 merged_dict[mid]["score"] += self.keyword_boost
+                logging.debug("HybridSearch: Boosted score for id %s by keyword boost %.3f.", mid, self.keyword_boost)
             else:
                 merged_dict[mid] = {
                     "id": mid,
@@ -329,9 +344,13 @@ class HybridSearch:
                     "summary": match.get("metadata", {}).get("summary", ""),
                     "text": match.get("metadata", {}).get("source_text", ""),
                 }
+                logging.debug("HybridSearch: Added keyword match id %s with score %.3f.", mid, match.get("score", 0))
 
         # Sort merged results by score descending
         results = sorted(merged_dict.values(), key=lambda x: x["score"], reverse=True)
+        logging.debug("HybridSearch: Total merged results after sorting: %d", len(results))
 
         # Return top_k results
-        return {"results": results[:k]}
+        final_results = results[:k]
+        logging.debug("HybridSearch: Returning top %d results.", len(final_results))
+        return {"results": final_results}
