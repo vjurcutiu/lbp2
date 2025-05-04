@@ -295,6 +295,19 @@ def upsert_files_to_vector_db(chunk_size: int = 1500,
         chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
         current_app.logger.info(f"Split {f.file_path} into {len(chunks)} chunks")
 
+        # Prepare metadata to include keywords and other file metadata if available
+        file_metadata = f.meta_data if isinstance(f.meta_data, dict) else {}
+        keywords = file_metadata.get('keywords') or file_metadata.get('keywords'.replace('_', '')) or file_metadata.get('keywords'.replace(' ', '')) or file_metadata.get('keywords'.lower()) or file_metadata.get('keywords'.upper())
+        # Fallback to 'keywords' key as in file_processing.py it is 'keywords' key
+        keywords = file_metadata.get('keywords', None)
+        # Ensure keywords is a string or list, convert to string if list
+        if isinstance(keywords, list):
+            keywords_str = ", ".join(keywords)
+        elif isinstance(keywords, str):
+            keywords_str = keywords
+        else:
+            keywords_str = ""
+
         for idx, chunk in enumerate(chunks):
             prompt = f"Represent this document chunk for searching relevant passages: {chunk}"
             try:
@@ -307,7 +320,10 @@ def upsert_files_to_vector_db(chunk_size: int = 1500,
                         'source_text': chunk,
                         'source_file': f.file_path,
                         'chunk_index': idx,
-                        'text_snippet': chunk[:100]
+                        'text_snippet': chunk[:100],
+                        'keywords': keywords_str,
+                        # Include all other metadata fields flattened except keywords
+                        **{k: v for k, v in file_metadata.items() if k != 'keywords'}
                     }
                 }
                 vc_resp = client.upsert([record], namespace)
