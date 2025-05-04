@@ -259,7 +259,7 @@ def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 400) -> list[st
     return chunks
 
 
-def upsert_files_to_vector_db(chunk_size: int = 500,
+def upsert_files_to_vector_db(chunk_size: int = 1500,
                               overlap: int = 200,
                               progress_callback=None):
     """
