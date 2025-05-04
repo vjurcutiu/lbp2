@@ -157,7 +157,7 @@ class OpenAIService:
         Returns 'broken' if the input is too short.
         """
         try:
-            return generate_keywords(text)
+            return generate_keywords(text, client=self.client)
         except Exception as e:
             self.logger.error("Keyword extraction failed", exc_info=True)
             raise OpenAIAPIError("Keyword extraction failed") from e

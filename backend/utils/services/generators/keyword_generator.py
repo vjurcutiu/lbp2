@@ -73,18 +73,19 @@ def map_terms_to_ontology(terms: list[str], label_map: dict[str, str], matcher: 
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
-def _generic_completion(prompt: str, system_instruction: str, model: str) -> str:
+def _generic_completion(prompt: str, system_instruction: str, model: str, client: OpenAI | None = None) -> str:
     logger = logging.getLogger("KeywordGenerator")
     logger.debug("Generic completion for keywords [model=%s]", model)
     messages = [
         {"role": "system", "content": system_instruction},
         {"role": "user", "content": prompt}
     ]
-    client = OpenAI()
+    if client is None:
+        client = OpenAI()
     response = client.chat.completions.create(
         model=model,
         messages=messages
-    )
+    )    
     return response.choices[0].message.content
 
 
@@ -209,7 +210,7 @@ def dedupe_keywords_fuzzy(keywords: list[str], threshold: int = 85) -> list[str]
     return deduped
 
 
-def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] | None = None, fuzzy_threshold: int = 85) -> str:
+def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] | None = None, fuzzy_threshold: int = 85, client: OpenAI | None = None) -> str:
     cleaned = preprocess_text(text)
     if len(cleaned.split()) < 30:
         return json.dumps({"locatie": "", "data": "", "domeniu": "", "hotarare": "", "cuvinte_cheie": []}, ensure_ascii=False)
@@ -221,9 +222,14 @@ def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] 
         if not flash_vocab: raise ValueError("flash_vocab must be provided for flash_fuzzy method")
         keywords = dedupe_keywords_fuzzy(extract_flashtext_keywords(cleaned, flash_vocab), threshold=fuzzy_threshold)
     elif method == "openai":
-        instruction = ("""SYSTEM:\nYou are a highly accurate AI assistant specialized in extracting information from Romanian legal documents.\n\nUSER:\nFrom the following decision text in Romanian..."""
+        instruction = (
+            "You are a highly accurate AI assistant specialized in extracting information from Romanian legal documents. "
+            "Extract the following fields as a JSON object: locatie, data, domeniu, hotarare, cuvinte_cheie (list of keywords). "
+            "Return only the JSON object.\n\n"
+            "Decision text:\n"
+            f"{cleaned}"
         )
-        raw = _generic_completion(cleaned, instruction, DEFAULT_KEYWORD_MODEL).strip()
+        raw = _generic_completion("", instruction, DEFAULT_KEYWORD_MODEL, client=client).strip()
         try:
             result = json.loads(raw)
         except json.JSONDecodeError:

@@ -189,12 +189,14 @@ def get_files_without_metadata_text():
 
 def process_files_for_metadata(type='keywords', progress_callback=None):
     meta_key = type
-    current_app.logger.info(f"meta_key: {meta_key}")
+    func = "process_files_for_metadata"
+    current_app.logger.info(f"[{func}] meta_key: {meta_key}")
     try:
         all_files = File.query.all()
         to_process = [f for f in all_files if f.meta_data is None or (isinstance(f.meta_data, dict) and meta_key not in f.meta_data)]
+        current_app.logger.info(f"[{func}] Found {len(to_process)} files to process")
     except Exception as e:
-        current_app.logger.error(f"Error querying files: {e}")
+        current_app.logger.error(f"[{func}] Error querying files: {e}")
         raise
 
     results = []
@@ -203,31 +205,33 @@ def process_files_for_metadata(type='keywords', progress_callback=None):
     for f in to_process:
         if os.path.exists(f.file_path):
             text = extract_text_from_file(f.file_path)
+            current_app.logger.info(f"[{func}] Processing file: {f.file_path} with text length: {len(text)}")
             if text:
                 try:
-                    # Use manager wrapper for metadata
                     if type == 'keywords':
                         api_content = aii.keywords(text)
+                        current_app.logger.info(f"[{func}] Raw keywords output for {f.file_path}: {api_content}")
                     else:
-                        # fallback to generic chat
                         api_content = aii.chat({
                             'messages': [
                                 {'role': 'system', 'content': f'Generate {type} for this document.'},
                                 {'role': 'user', 'content': text}
                             ]
                         })
+                        current_app.logger.info(f"[{func}] Raw metadata output for {f.file_path}: {api_content}")
                     f.meta_data = f.meta_data or {}
                     f.meta_data[meta_key] = api_content
                     results.append({'file_path': f.file_path, 'meta_data': api_content})
+                    current_app.logger.info(f"[{func}] Metadata saved for {f.file_path}")
                 except Exception as e:
                     current_app.logger.error(
-                        "Error processing metadata for %s: %s. Text snippet: %s",
-                        f.file_path,
-                        e,
-                        truncate_words(text, limit=20)
+                        f"[{func}] Error processing metadata for {f.file_path}: {e}. Text snippet: {truncate_words(text, limit=20)}",
+                        exc_info=True
                     )
+            else:
+                current_app.logger.warning(f"[{func}] Empty text extracted from {f.file_path}")
         else:
-            current_app.logger.warning(f"File not found: {f.file_path}")
+            current_app.logger.warning(f"[{func}] File not found: {f.file_path}")
         count += 1
         if progress_callback:
             progress_callback(count, total)
@@ -235,7 +239,7 @@ def process_files_for_metadata(type='keywords', progress_callback=None):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error committing metadata: {e}")
+        current_app.logger.error(f"[{func}] Error committing metadata: {e}")
     return results
 
 def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 400) -> list[str]:
