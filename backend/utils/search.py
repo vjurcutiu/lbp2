@@ -197,3 +197,141 @@ def default_search(query: str, additional_params: Optional[Dict[str, Any]] = Non
         index_name=params.get("index_name"),
         namespace=params.get("namespace")
     )
+
+
+class HybridSearch:
+    """
+    Combines semantic vector search with keyword filtering using Pinecone metadata.
+    Runs two queries (with and without keyword filter), merges and boosts results.
+    """
+
+    def __init__(
+        self,
+        embedder: Optional[Embedder] = None,
+        vector_store: Optional[PineconeClient] = None,
+        top_k: Optional[int] = None,
+        threshold: Optional[float] = None,
+        keyword_boost: float = 0.2,
+    ):
+        self.embedder = embedder or Embedder()
+        self.vector_store = vector_store
+        self.top_k = top_k or DEFAULT_TOP_K
+        self.threshold = threshold or DEFAULT_THRESHOLD
+        self.keyword_boost = keyword_boost
+
+    def search(
+        self,
+        query: str,
+        keywords: Optional[List[str]] = None,
+        index_name: Optional[str] = None,
+        namespace: Optional[str] = None,
+        top_k: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Perform hybrid search combining semantic and keyword filtering.
+
+        Args:
+            query: text query to embed and search.
+            keywords: list of keywords to filter by in metadata.
+            index_name: override the default index name.
+            namespace: override the default namespace.
+            top_k: override the default number of results.
+            threshold: override the default score threshold.
+
+        Returns:
+            A dict with a "results" list, each item containing id, score,
+            keywords, summary, and text.
+        """
+        # Embed the query
+        try:
+            vector = self.embedder.embed(query)
+        except Exception:
+            raise RuntimeError("Failed to generate embedding for query.")
+
+        # Lazy-load vector store
+        if not self.vector_store:
+            try:
+                self.vector_store = PineconeClient()
+            except Exception as e:
+                logging.error("PineconeClient init failed: %s", e, exc_info=True)
+                raise RuntimeError("Failed to initialize Pinecone client: " + str(e))
+
+        vs = self.vector_store
+        idx = index_name or vs.index_name
+        ns = namespace or vs.namespace
+        k = top_k or self.top_k
+        t = threshold or self.threshold
+
+        # Prepare filter for keyword search if keywords provided
+        filter_dict = None
+        if keywords:
+            filter_dict = {"keywords": {"$in": keywords}}
+
+        # Query 1: Semantic search without filter
+        try:
+            semantic_response = vs.query(
+                vector=vector,
+                top_k=k,
+                namespace=ns,
+                include_values=False,
+                include_metadata=True,
+            )
+        except Exception as e:
+            logging.error("Vector store semantic query failed: %s", e, exc_info=True)
+            raise RuntimeError(f"Vector store semantic query error: {e}")
+
+        semantic_matches = semantic_response.get("matches", [])
+
+        # Query 2: Keyword filtered search (if keywords provided)
+        keyword_matches = []
+        if filter_dict:
+            try:
+                keyword_response = vs.query(
+                    vector=vector,
+                    top_k=k,
+                    namespace=ns,
+                    filter=filter_dict,
+                    include_values=False,
+                    include_metadata=True,
+                )
+                keyword_matches = keyword_response.get("matches", [])
+            except Exception as e:
+                logging.error("Vector store keyword filtered query failed: %s", e, exc_info=True)
+                # Proceed without keyword matches if error occurs
+
+        # Merge and boost scores for items appearing in both results
+        merged_dict = {}
+
+        for match in semantic_matches:
+            score = match.get("score", 0)
+            if score >= t:
+                merged_dict[match["id"]] = {
+                    "id": match["id"],
+                    "score": score,
+                    "keywords": match.get("metadata", {}).get("keywords", ""),
+                    "summary": match.get("metadata", {}).get("summary", ""),
+                    "text": match.get("metadata", {}).get("source_text", ""),
+                }
+
+        for match in keyword_matches:
+            if match.get("score", 0) < t:
+                continue
+            mid = match["id"]
+            if mid in merged_dict:
+                # Boost score for dual match
+                merged_dict[mid]["score"] += self.keyword_boost
+            else:
+                merged_dict[mid] = {
+                    "id": mid,
+                    "score": match.get("score", 0),
+                    "keywords": match.get("metadata", {}).get("keywords", ""),
+                    "summary": match.get("metadata", {}).get("summary", ""),
+                    "text": match.get("metadata", {}).get("source_text", ""),
+                }
+
+        # Sort merged results by score descending
+        results = sorted(merged_dict.values(), key=lambda x: x["score"], reverse=True)
+
+        # Return top_k results
+        return {"results": results[:k]}

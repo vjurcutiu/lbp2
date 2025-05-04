@@ -24,7 +24,7 @@ from routes.info_routes import info_bp
 # ───> RAG integration imports
 from utils.services.agentic.query_processor import QueryProcessor
 from utils.services.agentic.search_router    import SearchRouter
-from utils.search     import KeywordSearch, VectorSearch
+from utils.search     import KeywordSearch, VectorSearch, HybridSearch
 from utils.keyword_loader import load_keyword_items, build_keyword_topics
 
 
@@ -170,7 +170,7 @@ def create_app(config_object: str = None) -> Flask:
         topics = build_keyword_topics()
 
     keyword_search  = KeywordSearch(items)
-    vector_search   = VectorSearch()
+    vector_search   = HybridSearch()
     qp              = QueryProcessor(ai_service, topics)
     search_router   = SearchRouter(qp, keyword_search, vector_search)
     conv_manager    = ConversationManager(
