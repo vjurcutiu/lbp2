@@ -21,7 +21,7 @@ const ChatWindow = ({ messages }) => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto p-2.5 w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
+      className="flex-1 overflow-y-auto px-40 py-2.5 w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
     >
       {messages.map((msg, idx) => (
         <div
