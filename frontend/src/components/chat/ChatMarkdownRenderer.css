@@ -39,6 +39,14 @@
   margin: 0 0 1em 0;
 }
 
+ul.chat-md-list {
+  list-style-type: disc;
+}
+
+ol.chat-md-list {
+  list-style-type: decimal;
+}
+
 .chat-md-list-item {
   margin-bottom: 0.25em;
 }
