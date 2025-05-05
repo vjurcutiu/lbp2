@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
 import DarkModeToggle from '../darkMode/DarkModeToggle';
 import { useSelector } from 'react-redux';
 
+
 const ChatHeader = ({ onBack, className }) => {
   const activeConversationId = useSelector(
     (state) => state.conversations.activeConversationId
@@ -19,7 +20,7 @@ const ChatHeader = ({ onBack, className }) => {
   // Otherwise, if conversation exists, use its title, defaulting to "Conversation {ID}" if no title is set.
   const title =
     !activeConversationId || !conversation
-      ? 'Conversatie Noua'
+      ? 'Cautare Noua'
       : conversation.title || `Conversatia ${activeConversationId}`;
 
   return (
@@ -30,7 +31,9 @@ const ChatHeader = ({ onBack, className }) => {
             Back
           </button>
         )}
-        <h2 className="m-0 text-lg">{title}</h2>
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+        {title}
+        </h2>
       </div>
     </div>
   );
