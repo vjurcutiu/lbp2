@@ -74,6 +74,7 @@ def map_terms_to_ontology(terms: list[str], label_map: dict[str, str], matcher: 
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
 def _generic_completion(prompt: str, system_instruction: str, model: str, client: OpenAI | None = None) -> str:
+    import httpx
     logger = logging.getLogger("KeywordGenerator")
     logger.debug("Generic completion for keywords [model=%s]", model)
     messages = [
@@ -82,10 +83,14 @@ def _generic_completion(prompt: str, system_instruction: str, model: str, client
     ]
     if client is None:
         client = OpenAI()
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages
-    )    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+    except (OpenAIError, httpx.HTTPError) as e:
+        logger.error("OpenAI API call failed: %s", e)
+        raise OpenAIError(str(e)) from e
     return response.choices[0].message.content
 
 

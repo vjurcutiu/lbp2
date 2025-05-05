@@ -38,23 +38,11 @@ def handle_chat_message_stream(data):
     """
     from utils.services.conversation_manager import ConversationManager
     from db.models import db
-    from utils.services.ai_api_manager import OpenAIService
-    from utils.services.agentic.search_router import SearchRouter
+    from utils.services import shared
 
-    # You may need to adjust how you get these instances in your app
-    ai_service = OpenAIService()
-    # --- Instantiate SearchRouter and dependencies as in app.py ---
-    from utils.keyword_loader import load_keyword_items, build_keyword_topics
-    from utils.search import KeywordSearch, HybridSearch
-    from utils.services.agentic.query_processor import QueryProcessor
-
-    items = load_keyword_items()
-    topics = build_keyword_topics()
-    keyword_search = KeywordSearch(items)
-    vector_search = HybridSearch()
-    qp = QueryProcessor(ai_service, topics)
-    search_router = SearchRouter(qp, keyword_search, vector_search)
-    # --------------------------------------------------------------
+    # Use shared instances initialized at app startup
+    ai_service = shared.ai_service
+    search_router = shared.search_router
     notifier = None  # Not needed for streaming
     conv_manager = ConversationManager(db.session, ai_service, search_router, notifier)
 
@@ -71,11 +59,7 @@ def handle_chat_message_stream(data):
     user_msg = msg_repo.add_user_message(conversation.id, text)
     conv_manager.session.commit()
 
-    if is_new:
-        conv_manager.generate_title(text, conversation)
-    else:
-        conv_manager.update_summary(conversation, text, additional_params)
-
+    # Defer title/summary generation to after streaming starts
     chat_history = conv_manager.build_context(conversation)
     results = conv_manager.search_router.search(text)
     docs = [m["text"] for m in results.get("results", [])]
@@ -95,6 +79,7 @@ def handle_chat_message_stream(data):
     try:
         response = ai_service.chat(payload)
         full_reply = ""
+        first_chunk_sent = False
         for chunk in response:
             # OpenAI API returns objects with .choices[0].delta.content for streamed chunks
             content = ""
@@ -105,6 +90,15 @@ def handle_chat_message_stream(data):
             if content:
                 full_reply += content
                 emit('chat_stream', {"chunk": content, "is_final": False})
+                if not first_chunk_sent:
+                    first_chunk_sent = True
+                    # After first chunk, start background task for title/summary generation
+                    def post_stream_tasks():
+                        if is_new:
+                            conv_manager.generate_title(text, conversation)
+                        else:
+                            conv_manager.update_summary(conversation, text, additional_params)
+                    eventlet.spawn_n(post_stream_tasks)
         # Save the full AI message to DB
         msg_repo.add_ai_message(conversation.id, full_reply)
         conv_manager.session.commit()
