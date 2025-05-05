@@ -177,12 +177,12 @@ const ConversationSidebar = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div
-                className="group flex items-center px-3 py-2 rounded border border-transparent hover:bg-gray-200 justify-between"
+                className="group flex items-center px-3 py-2 flex-1 rounded border border-transparent hover:bg-gray-200"
                 onClick={() => handleConversationSelect(conv.id)}
               >
                 <Link
                   to={`/conversation/${conv.id}`}
-                  className="text-sm"
+                  className="flex-1 text-sm"
                 >
                   <span>{conv.title || `Conversation ${conv.id}`}</span>
                 </Link>
