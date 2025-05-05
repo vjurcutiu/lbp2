@@ -28,8 +28,8 @@ const ChatWindow = ({ messages }) => {
           key={msg.id || `${msg.conversation_id}-${msg.created_at}-${idx}`}
           className={
             msg.sender === 'user'
-              ? 'self-end max-w-[60%] bg-blue-600 text-white px-3 py-2 rounded-xl mb-2.5'
-              : 'self-start max-w-[60%] bg-gray-300 dark:bg-gray-600 text-black dark:text-white px-3 py-2 rounded-xl mb-2.5'
+              ? 'self-end max-w-[60%] bg-gray-300 text-black px-3 py-2 rounded-xl mb-2.5'
+              : 'self-start text-black dark:text-white px-3 py-2 rounded-xl mb-2.5'
           }
         >
           <div className="m-0">
@@ -43,11 +43,13 @@ const ChatWindow = ({ messages }) => {
               <div>{msg.message}</div>
             )}
           </div>
+           {/*
           <small className="text-xs opacity-60">
             {msg.created_at && !isNaN(new Date(msg.created_at).getTime())
               ? new Date(msg.created_at).toLocaleTimeString()
               : msg.created_at || 'No timestamp'}
           </small>
+          */}
         </div>
       ))}
     </div>

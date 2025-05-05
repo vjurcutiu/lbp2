@@ -24,7 +24,7 @@ const ChatHeader = ({ onBack, className }) => {
       : conversation.title || `Conversatia ${activeConversationId}`;
 
   return (
-    <div className={`flex items-center justify-between p-3.5 bg-gray-200 dark:bg-gray-700 w-full shadow-sm ${className}`}>
+    <div className={`flex items-center justify-between p-3.5 bg-gray-300 dark:bg-gray-700 w-full shadow-sm ${className}`}>
       <div className="flex items-center">
         {onBack && (
           <button onClick={onBack} className="mr-2.5">
