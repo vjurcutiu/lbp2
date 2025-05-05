@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import ReactMarkdown from 'react-markdown';
+import ChatMarkdownRenderer from './ChatMarkdownRenderer';
 import './styles/ChatWindow.css'
 
 const ChatWindow = ({ messages }) => {
@@ -37,8 +37,10 @@ const ChatWindow = ({ messages }) => {
               <div className="flex justify-center my-2">
                 <div className="spinner"> </div>
               </div>
+            ) : msg.sender === 'ai' ? (
+              <ChatMarkdownRenderer content={msg.message} />
             ) : (
-              <ReactMarkdown>{msg.message}</ReactMarkdown>
+              <div>{msg.message}</div>
             )}
           </div>
           <small className="text-xs opacity-60">
