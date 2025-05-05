@@ -34,8 +34,11 @@ const ChatWindow = ({ messages }) => {
         >
           <div className="m-0">
             {msg.pending ? (
-              <div className="flex justify-center my-2">
-                <div className="spinner"> </div>
+              <div className="flex items-center my-2">
+                <div className="flex-1">
+                  <ChatMarkdownRenderer content={msg.message} />
+                </div>
+                <span className="ml-2 animate-pulse text-lg text-blue-500">|</span>
               </div>
             ) : msg.sender === 'ai' ? (
               <ChatMarkdownRenderer content={msg.message} />
