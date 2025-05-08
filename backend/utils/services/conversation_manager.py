@@ -251,6 +251,7 @@ class AIOrchestrator:
             "You are an AI assistant that receives the conversation history, relevant documents, and the filenames of those documents from a search.\n"
             "Your role is to keep track of the conversation and provide the most relevant and accurate answers to the user.\n"
             "Use the conversation history, documents and file locations to inform your responses."
+            "Tell the user the filenames when it is relevant and could add value to the message."
         )
         openai_msgs.append(OpenAIMessage(role="system", content=system_message_content))
 
