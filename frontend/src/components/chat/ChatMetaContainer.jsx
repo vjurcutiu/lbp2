@@ -36,7 +36,7 @@ const ChatMetaContainer = ({ messages, updateMessages, onNewMessage }) => {
 
   return (
     <div className="w-full h-full flex flex-col bg-gray-100 dark:bg-gray-800">
-      <ChatHeader title="Chat App" />
+      {/*<ChatHeader title="Chat App" />*/}
       <div className="flex-1 flex flex-col overflow-y-auto">
       {messages.length > 0 ? (
         <ChatWindow messages={messages} />

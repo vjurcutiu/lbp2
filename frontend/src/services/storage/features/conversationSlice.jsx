@@ -44,12 +44,14 @@ const conversationsSlice = createSlice({
     error: null,
   },
   reducers: {
-    selectConversation: (state, action) => {
-      console.log('Selecting conversation:', action.payload);
-      state.activeConversationId = action.payload;
-      state.isNewConversation = false;
-      state.conversationMessages = [];
-    },
+selectConversation: (state, action) => {
+  console.log('Selecting conversation:', action.payload);
+  if (state.activeConversationId !== action.payload) {
+    state.activeConversationId = action.payload;
+    state.isNewConversation = false;
+    state.conversationMessages = [];
+  }
+},
     setConversations: (state, action) => {
       console.log('Updating conversation list:', action.payload);
       state.conversations = action.payload;

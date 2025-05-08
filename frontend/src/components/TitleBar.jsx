@@ -1,5 +1,6 @@
 import React from 'react';
 import './TitleBar.css'; // Import CSS for styles
+import { MdMinimize, MdCropSquare, MdClose } from 'react-icons/md';
 
 const TitleBar = () => {
   // Function to minimize the window
@@ -27,14 +28,14 @@ const TitleBar = () => {
     <div className="titlebar">
       <div className="title">LexBot PRO</div>
       <div className="window-controls">
-        <button className="minimize" onClick={handleMinimize}>
-          &#x2013;
+        <button className="minimize" onClick={handleMinimize} aria-label="Minimize">
+          <MdMinimize size={20} />
         </button>
-        <button className="maximize" onClick={handleMaximize}>
-          &#9633;
+        <button className="maximize" onClick={handleMaximize} aria-label="Maximize">
+          <MdCropSquare size={20} />
         </button>
-        <button className="close" onClick={handleClose}>
-          &#x2715;
+        <button className="close" onClick={handleClose} aria-label="Close">
+          <MdClose size={20} />
         </button>
       </div>
     </div>
