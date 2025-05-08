@@ -8,8 +8,7 @@ const apiClient = axios.create({
   baseURL: 'http://localhost:5000',
   headers: {
     'Content-Type': 'application/json',
-  },
-  timeout: 10000,
+  }
 });
 
 // Function to update the base URL with a new port.

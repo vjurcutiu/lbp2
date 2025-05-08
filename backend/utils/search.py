@@ -325,6 +325,7 @@ class HybridSearch:
                     "keywords": match.get("metadata", {}).get("keywords", ""),
                     "summary": match.get("metadata", {}).get("summary", ""),
                     "text": match.get("metadata", {}).get("source_text", ""),
+                    "source_file": match.get("metadata", {}).get("source_file", ""),
                 }
         logging.debug("HybridSearch: %d semantic matches passed threshold %.3f.", len(merged_dict), t)
 
@@ -343,6 +344,7 @@ class HybridSearch:
                     "keywords": match.get("metadata", {}).get("keywords", ""),
                     "summary": match.get("metadata", {}).get("summary", ""),
                     "text": match.get("metadata", {}).get("source_text", ""),
+                    "source_file": match.get("metadata", {}).get("source_file", ""),
                 }
                 logging.debug("HybridSearch: Added keyword match id %s with score %.3f.", mid, match.get("score", 0))
 

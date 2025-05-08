@@ -183,7 +183,13 @@ class ConversationManager:
 
         results = self.search_router.search(text)
 
-        docs = [m["text"] for m in results.get("results", [])]
+        docs = [
+            {
+                "text": m.get("text", ""),
+                "source_file": m.get("source_file", None)
+            }
+            for m in results.get("results", [])
+        ]
         logging.debug("SearchRouter chose %s mode, returned %d docs", results.get("intent"), len(docs))
 
         ai_orch = AIOrchestrator(self.ai_service, default_search)
@@ -197,7 +203,8 @@ class ConversationManager:
             "conversation_title": conversation.title,
             "user_message": text,
             "ai_response": ai_reply,
-            "new_conversation_id": conversation.id if is_new else None
+            "new_conversation_id": conversation.id if is_new else None,
+            "docs": docs  # Include docs with text and source_file for frontend display
         }
 
 class MessageRepository:
@@ -235,21 +242,26 @@ class AIOrchestrator:
         self.ai_service = ai_service
         self.search_client = search_client
 
-    def get_response(self, user_message: str, chat_history: List[dict], docs: List[str]) -> str:
+    def get_response(self, user_message: str, chat_history: List[dict], docs: List[dict]) -> str:
         # Construct a more organized prompt with clear context for the AI
         openai_msgs = []
 
         # System message to define AI role and context
         system_message_content = (
-            "You are an AI assistant that receives the conversation history and relevant documents from a search.\n"
+            "You are an AI assistant that receives the conversation history, relevant documents, and the filenames of those documents from a search.\n"
             "Your role is to keep track of the conversation and provide the most relevant and accurate answers to the user.\n"
-            "Use the conversation history and documents to inform your responses."
+            "Use the conversation history, documents and file locations to inform your responses."
         )
         openai_msgs.append(OpenAIMessage(role="system", content=system_message_content))
 
         # Add relevant documents if any
         if docs:
-            system_content = "\n\n".join(docs)
+            formatted_docs = []
+            for doc in docs:
+                file_path = doc.get("source_file") or "Unknown file"
+                text = doc.get("text", "")
+                formatted_docs.append(f"File: {file_path}\nContent: {text}")
+            system_content = "\n\n".join(formatted_docs)
             openai_msgs.append(OpenAIMessage(role="system", content=f"Relevant documents:\n{system_content}"))
 
         # Add conversation history messages
