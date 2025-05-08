@@ -236,16 +236,29 @@ class AIOrchestrator:
         self.search_client = search_client
 
     def get_response(self, user_message: str, chat_history: List[dict], docs: List[str]) -> str:
-        openai_msgs = [
-            OpenAIMessage(role=entry["role"], content=entry["content"])
-            for entry in chat_history
-        ]
+        # Construct a more organized prompt with clear context for the AI
+        openai_msgs = []
 
+        # System message to define AI role and context
+        system_message_content = (
+            "You are an AI assistant that receives the conversation history and relevant documents from a search.\n"
+            "Your role is to keep track of the conversation and provide the most relevant and accurate answers to the user.\n"
+            "Use the conversation history and documents to inform your responses."
+        )
+        openai_msgs.append(OpenAIMessage(role="system", content=system_message_content))
+
+        # Add relevant documents if any
         if docs:
             system_content = "\n\n".join(docs)
-            openai_msgs.insert(0, OpenAIMessage(role="system", content=f"Relevant documents:\n{system_content}"))
+            openai_msgs.append(OpenAIMessage(role="system", content=f"Relevant documents:\n{system_content}"))
 
+        # Add conversation history messages
+        for entry in chat_history:
+            openai_msgs.append(OpenAIMessage(role=entry["role"], content=entry["content"]))
+
+        # Add the current user message
         openai_msgs.append(OpenAIMessage(role="user", content=user_message))
+
         payload = ChatPayload(messages=openai_msgs)
         return self.ai_service.chat(payload)
 
