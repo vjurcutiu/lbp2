@@ -111,15 +111,13 @@ class ConversationManager:
                 convo = Conversation()
                 self.session.add(convo)
                 self.session.commit()
-                if self.notifier is not None:
-                    self.notifier.emit_new_conversation(convo)
+                self.notifier.emit_new_conversation(convo)
             return convo
 
         convo = Conversation()
         self.session.add(convo)
         self.session.commit()
-        if self.notifier is not None:
-            self.notifier.emit_new_conversation(convo)
+        self.notifier.emit_new_conversation(convo)
         return convo
 
     def is_new(self, conversation):

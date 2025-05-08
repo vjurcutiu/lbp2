@@ -180,16 +180,6 @@ def create_app(config_object: str = None) -> Flask:
         notifier
     )
 
-    # Assign shared instances for use in sockets.py and elsewhere
-    from utils.services import shared
-    shared.ai_service = ai_service
-    shared.keyword_search = keyword_search
-    shared.vector_search = vector_search
-    shared.qp = qp
-    shared.search_router = search_router
-    shared.items = items
-    shared.topics = topics
-
     # Register blueprints and CLI
     register_blueprints(app, conv_manager)
     register_cli_commands(app)

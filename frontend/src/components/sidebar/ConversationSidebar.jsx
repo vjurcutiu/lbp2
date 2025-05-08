@@ -15,8 +15,6 @@ import {
 import { renameConversation, deleteConversation } from '../../services';
 import { processFolder, cancelProcessFolder } from '../../services/folderApi';
 import { BsThreeDotsVertical } from 'react-icons/bs';
-import { FaSearch } from "react-icons/fa";
-
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -160,15 +158,13 @@ const ConversationSidebar = () => {
         />
       </div>
 
-      <div className="p-4">        
+      <div className="p-4">
+        <h2 className="mb-2 text-sm font-semibold">Conversatii</h2>
         <button
-          className="w-full mb-2 px-3 py-2 bg-blue-500 text-black rounded text-left flex items-center gap-2"
+          className="w-full mb-2 px-3 py-2 bg-blue-500 text-black rounded text-left"
           onClick={handleNewConversationClick}
         >
-          <FaSearch />
-          <span className="text-sm">
-            Cautare noua
-          </span>
+          <span className="text-sm">Conversatie Noua</span>
         </button>
 
         <ul className="list-none p-0 m-0">
@@ -180,13 +176,11 @@ const ConversationSidebar = () => {
               }`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div
-                className="group flex items-center px-3 py-2 flex-1 rounded border border-transparent hover:bg-gray-200"
-                onClick={() => handleConversationSelect(conv.id)}
-              >
+              <div className="group flex items-center px-3 py-2 flex-1 rounded border border-transparent hover:bg-gray-200">
                 <Link
                   to={`/conversation/${conv.id}`}
                   className="flex-1 text-sm"
+                  onClick={() => handleConversationSelect(conv.id)}
                 >
                   <span>{conv.title || `Conversation ${conv.id}`}</span>
                 </Link>

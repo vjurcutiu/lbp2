@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import ChatMarkdownRenderer from './ChatMarkdownRenderer';
+import ReactMarkdown from 'react-markdown';
 import './styles/ChatWindow.css'
 
 const ChatWindow = ({ messages }) => {
@@ -21,38 +21,31 @@ const ChatWindow = ({ messages }) => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto px-30 pt-10 pb-12 w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
+      className="flex-1 overflow-y-auto p-2.5 w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
     >
       {messages.map((msg, idx) => (
         <div
           key={msg.id || `${msg.conversation_id}-${msg.created_at}-${idx}`}
           className={
             msg.sender === 'user'
-              ? 'self-end max-w-[60%] bg-gray-300 text-black px-3 py-2 rounded-xl mb-2.5'
-              : 'self-start text-black dark:text-white px-3 py-2 rounded-xl mb-2.5'
+              ? 'self-end max-w-[60%] bg-blue-600 text-white px-3 py-2 rounded-xl mb-2.5'
+              : 'self-start max-w-[60%] bg-gray-300 dark:bg-gray-600 text-black dark:text-white px-3 py-2 rounded-xl mb-2.5'
           }
         >
           <div className="m-0">
             {msg.pending ? (
-              <div className="flex items-center my-2">
-                <div className="flex-1">
-                  <ChatMarkdownRenderer content={msg.message} />
-                </div>
-                <span className="ml-2 animate-pulse text-lg text-blue-500">|</span>
+              <div className="flex justify-center my-2">
+                <div className="spinner"> </div>
               </div>
-            ) : msg.sender === 'ai' ? (
-              <ChatMarkdownRenderer content={msg.message} />
             ) : (
-              <div>{msg.message}</div>
+              <ReactMarkdown>{msg.message}</ReactMarkdown>
             )}
           </div>
-           {/*
           <small className="text-xs opacity-60">
             {msg.created_at && !isNaN(new Date(msg.created_at).getTime())
               ? new Date(msg.created_at).toLocaleTimeString()
               : msg.created_at || 'No timestamp'}
           </small>
-          */}
         </div>
       ))}
     </div>

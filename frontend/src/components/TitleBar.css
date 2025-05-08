@@ -14,29 +14,23 @@
     font-size: 14px;
   }
   
-.window-controls {
-  display: flex;
-  gap: 0;
-}
+  .window-controls {
+    display: flex;
+    gap: 10px;
+  }
   
-.window-controls button {
-  -webkit-app-region: no-drag;
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 14px;
-  width: 30px;
-  height: 30px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  font-family: Arial, sans-serif;
-  font-weight: normal;
-  text-align: center;
-}
+  .window-controls button {
+    -webkit-app-region: no-drag;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+  }
   
   .window-controls button:hover {
     background-color: rgba(255, 255, 255, 0.1);
   }
+  
