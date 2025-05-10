@@ -2,6 +2,8 @@ import os
 import socket
 import sys
 import io
+import keyring
+import secrets
 import logging
 from logging.handlers import RotatingFileHandler
 import structlog
@@ -20,12 +22,18 @@ from routes.chat_routes import create_chat_blueprint
 from routes.file_processing_routes import file_bp
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
+from routes.api_vault_routes import api_vault_bp
 
 # ───> RAG integration imports
 from utils.services.agentic.query_processor import QueryProcessor
 from utils.services.agentic.search_router    import SearchRouter
 from utils.search     import KeywordSearch, VectorSearch, HybridSearch
 from utils.keyword_loader import load_keyword_items, build_keyword_topics
+
+from utils.services.api_vault.secrets import ApiKeyManager
+from utils.services.api_vault.secrets_loader import SecretsLoader
+
+
 
 
 def configure_logging(app: Flask):
@@ -102,6 +110,7 @@ def register_blueprints(app: Flask, conv_manager: ConversationManager):
     app.register_blueprint(file_bp)
     app.register_blueprint(extra_bp, url_prefix='/extra')
     app.register_blueprint(info_bp, url_prefix='/info')
+    app.register_blueprint(api_vault_bp, url_prefix='/api-vault')
 
 
 def register_cli_commands(app: Flask):
@@ -132,6 +141,26 @@ def create_app(config_object: str = None) -> Flask:
     """Application factory: creates and configures the Flask app."""
     app = Flask(__name__, instance_relative_config=True)
 
+    # ── Bootstrap SECRET_KEY via keyring ──
+    SERVICE_NAME = "LEXBOT_PRO"              # pick a sensible name
+    KR_USERNAME  = "flask-secret-key"       # a fixed “username” for this secret
+
+    secret = keyring.get_password(SERVICE_NAME, KR_USERNAME)
+    if secret is None:
+        # first run: generate and persist a new one
+        secret = secrets.token_hex(32)      # 64 hex chars
+        keyring.set_password(SERVICE_NAME, KR_USERNAME, secret)
+
+    app.config['SECRET_KEY'] = secret
+
+    SecretsLoader().load_env()
+
+    key = os.environ.get("OPENAI_API_KEY")
+    if key:
+        print(f"OPENAI_API_KEY is set and begins with: {key[:8]}…")
+    else:
+        print("OPENAI_API_KEY is not set in the environment")
+
     # Load default & override config
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URI', 'sqlite:///rag_chat.db'),
@@ -156,6 +185,8 @@ def create_app(config_object: str = None) -> Flask:
     # Setup services
     notifier     = SocketNotifier(socketio, app)
     ai_service   = OpenAIService()
+    api_key_manager = ApiKeyManager()
+    app.api_key_manager = api_key_manager
 
     # Configure logging (now with UTF-8)
     configure_logging(app)
