@@ -12,7 +12,7 @@ import React from 'react';
 const AbstractModal = ({ title, children, onClose, actions }) => {
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-25"
+      className="fixed inset-0 flex items-center justify-center bg-opacity-25"
       onClick={onClose}
     >
       <div
@@ -30,8 +30,8 @@ const AbstractModal = ({ title, children, onClose, actions }) => {
               onClick={action.onClick}
               className={`px-4 py-2 rounded-lg ${
                 action.variant === 'primary'
-                  ? 'bg-gray-500 text-white'
-                  : 'bg-gray-300 text-gray-700'
+                  ? 'bg-gray-500 text-gray-700'
+                  : 'bg-gray-500 text-gray-700'
               }`}
             >
               {action.label}

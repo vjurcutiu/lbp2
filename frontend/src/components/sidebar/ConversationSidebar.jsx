@@ -1,5 +1,3 @@
-// ConversationSidebar.jsx
-
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -8,15 +6,15 @@ import ContextMenu from './ContextMenu';
 import RenameModal from './RenameModal';
 import DeleteModal from './DeleteModal';
 import UploadProgressModal from './UploadProgressModal';
+import KeyModal from './KeyModal';
+import { BsThreeDotsVertical } from 'react-icons/bs';
+import { FaSearch, FaKey } from 'react-icons/fa';
 import {
   generateNewConversationThunk,
   selectConversation
 } from '../../services/storage/features/conversationSlice';
 import { renameConversation, deleteConversation } from '../../services';
 import { processFolder, cancelProcessFolder } from '../../services/folderApi';
-import { BsThreeDotsVertical } from 'react-icons/bs';
-import { FaSearch } from "react-icons/fa";
-
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -26,13 +24,15 @@ const ConversationSidebar = () => {
   const [menuData, setMenuData] = useState({ open: false, conversation: null, x: 0, y: 0 });
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameConversationId, setRenameConversationId] = useState(null);
-  const [newTitle, setNewTitle] = useState("");
+  const [newTitle, setNewTitle] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConversationId, setDeleteConversationId] = useState(null);
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentSession, setCurrentSession] = useState({ id: null, es: null });
+
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
   const buttonRef = useRef(null);
 
@@ -48,7 +48,7 @@ const ConversationSidebar = () => {
   const handleEditConversation = (conversationId) => {
     const conv = conversations.find(c => c.id === conversationId);
     setRenameConversationId(conversationId);
-    setNewTitle(conv?.title || "");
+    setNewTitle(conv?.title || '');
     setIsRenameModalOpen(true);
   };
 
@@ -88,7 +88,7 @@ const ConversationSidebar = () => {
   const closeRenameModal = () => {
     setIsRenameModalOpen(false);
     setRenameConversationId(null);
-    setNewTitle("");
+    setNewTitle('');
   };
 
   const handleRenameSubmit = async () => {
@@ -97,7 +97,7 @@ const ConversationSidebar = () => {
       await renameConversation(renameConversationId, newTitle);
       closeRenameModal();
     } catch (error) {
-      console.error("Error renaming conversation", error);
+      console.error('Error renaming conversation', error);
     }
   };
 
@@ -106,25 +106,20 @@ const ConversationSidebar = () => {
       setShowProgressModal(true);
       setUploadProgress(0);
 
-      // Start processing and get session info + promise
       const { sessionId, eventSource, resultPromise } = await processFolder(
         folderPath,
         ['.txt', '.pdf'],
         (progress) => setUploadProgress(progress)
       );
 
-      // Keep for cancellation later
       setCurrentSession({ id: sessionId, es: eventSource });
 
-      // Wait for processing to complete
       await resultPromise;
 
-      // Once done, generate a new conversation and close modal
       dispatch(generateNewConversationThunk());
       setShowProgressModal(false);
       setCurrentSession({ id: null, es: null });
     } catch (err) {
-      // If cancelled or error, log and simply close modal
       console.warn(err.message);
       setShowProgressModal(false);
       setCurrentSession({ id: null, es: null });
@@ -132,17 +127,14 @@ const ConversationSidebar = () => {
   };
 
   const handleCancelUpload = async () => {
-    // Close the SSE stream so we stop getting updates
     if (currentSession.es) {
       currentSession.es.close();
     }
-    // Tell the server to cancel processing
     try {
       await cancelProcessFolder(currentSession.id);
     } catch (err) {
-      console.error("Failed to cancel processing:", err);
+      console.error('Failed to cancel processing:', err);
     }
-    // Hide the modal and reset state
     setShowProgressModal(false);
     setCurrentSession({ id: null, es: null });
   };
@@ -152,15 +144,22 @@ const ConversationSidebar = () => {
       className="w-[250px] border-r border-gray-300 bg-gray-50 dark:bg-gray-800 overflow-y-auto h-full relative"
       onClick={closeContextMenu}
     >
-      <div className="h-15 flex items-center justify-center border-b border-gray-300">
+      <div className="h-15 flex items-center justify-between border-b border-gray-300 px-2">
         <FolderBrowseButton
           buttonText="Adauga Fisiere"
           onFolderSelect={handleFolderSelect}
           onError={(error) => console.error('File selection error:', error)}
         />
+        <button
+          className="ml-2 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+          onClick={() => setIsKeyModalOpen(true)}
+          title="Configure API Keys"
+        >
+          <FaKey />
+        </button>
       </div>
 
-      <div className="p-4">        
+      <div className="p-4">
         <button
           className="w-full mb-2 px-3 py-2 bg-blue-500 text-black rounded text-left flex items-center gap-2"
           onClick={handleNewConversationClick}
@@ -238,6 +237,11 @@ const ConversationSidebar = () => {
           onCancel={handleCancelUpload}
         />
       )}
+
+      <KeyModal
+        isOpen={isKeyModalOpen}
+        onClose={() => setIsKeyModalOpen(false)}
+      />
     </div>
   );
 };
