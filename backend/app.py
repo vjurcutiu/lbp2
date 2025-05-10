@@ -2,6 +2,8 @@ import os
 import socket
 import sys
 import io
+import keyring
+import secrets
 import logging
 from logging.handlers import RotatingFileHandler
 import structlog
@@ -20,7 +22,7 @@ from routes.chat_routes import create_chat_blueprint
 from routes.file_processing_routes import file_bp
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
-from routes.api_vault_routes import routes as api_vault_bp
+from routes.api_vault_routes import api_vault_bp
 
 # ───> RAG integration imports
 from utils.services.agentic.query_processor import QueryProcessor
@@ -29,6 +31,7 @@ from utils.search     import KeywordSearch, VectorSearch, HybridSearch
 from utils.keyword_loader import load_keyword_items, build_keyword_topics
 
 from utils.services.api_vault.secrets import ApiKeyManager
+
 
 
 def configure_logging(app: Flask):
@@ -135,6 +138,18 @@ def create_app(config_object: str = None) -> Flask:
     print("💥 create_app() entered")
     """Application factory: creates and configures the Flask app."""
     app = Flask(__name__, instance_relative_config=True)
+
+    # ── Bootstrap SECRET_KEY via keyring ──
+    SERVICE_NAME = "LexBot PRO"              # pick a sensible name
+    KR_USERNAME  = "flask-secret-key"       # a fixed “username” for this secret
+
+    secret = keyring.get_password(SERVICE_NAME, KR_USERNAME)
+    if secret is None:
+        # first run: generate and persist a new one
+        secret = secrets.token_hex(32)      # 64 hex chars
+        keyring.set_password(SERVICE_NAME, KR_USERNAME, secret)
+
+    app.config['SECRET_KEY'] = secret
 
     # Load default & override config
     app.config.from_mapping(

@@ -1,5 +1,5 @@
 import logging
-from flask import Blueprint, request, render_template, redirect, url_for, flash
+from flask import Blueprint, request, jsonify
 import utils.services.api_vault.secrets as secret_store
 
 # Configure logger to include filename and function name
@@ -10,58 +10,60 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-routes = Blueprint('api-vault', __name__)
+api_vault_bp = Blueprint('api-vault', __name__)
 
-@routes.route('/', methods=['GET', 'POST'])
+@api_vault_bp.route('/', methods=['GET', 'POST'])
 def index():
     """List entries and handle adding/updating secrets."""
     try:
         if request.method == 'POST':
-            name = request.form.get('entry_name', '').strip()
-            val = request.form.get('secret_value', '').strip()
+            # Determine payload source: JSON or form data
+            if request.is_json:
+                data = request.get_json(silent=True) or {}
+            else:
+                data = request.form.to_dict() or {}
+                logger.info('Using form data payload for POST')
+
+            name = data.get('entry_name', '').strip()
+            val = data.get('secret_value', '').strip()
             if not name or not val:
-                flash('Both name and value are required.', 'warning')
                 logger.warning('Invalid input: name or value missing')
-                return redirect(url_for('routes.index'))
+                return jsonify({'error': 'Both name and value are required.'}), 400
 
             secret_store.add_secret(name, val)
-            flash(f"Stored '{name}' successfully.", 'success')
             logger.info(f"Added/Updated secret: {name}")
-            return redirect(url_for('routes.index'))
+            return jsonify({'message': f"Stored '{name}' successfully."}), 200
 
+        # GET: list all entries
         entries = secret_store.list_entries()
         logger.info('Fetched entries list')
-        return render_template('index.html', entries=entries)
+        return jsonify({'entries': entries}), 200
 
     except Exception as e:
-        flash('An error occurred while processing your request.', 'error')
         logger.error(f"Error in index(): {e}", exc_info=True)
-        return render_template('index.html', entries=[]), 500
+        return jsonify({'error': 'An error occurred while processing your request.'}), 500
 
-@routes.route('/entry/<name>', methods=['GET'])
+@api_vault_bp.route('/entry/<name>', methods=['GET'])
 def show_entry(name):
     """Show whether a secret exists for the given entry name."""
     try:
         val = secret_store.fetch_secret(name)
         exists = val is not None
         logger.info(f"Checked existence for secret: {name}, exists={exists}")
-        return render_template('entry.html', name=name, exists=exists)
+        return jsonify({'name': name, 'exists': exists}), 200
 
     except Exception as e:
-        flash('Error fetching the secret.', 'error')
         logger.error(f"Error in show_entry('{name}'): {e}", exc_info=True)
-        return redirect(url_for('routes.index')), 500
+        return jsonify({'error': 'Error fetching the secret.'}), 500
 
-@routes.route('/delete/<name>', methods=['POST'])
+@api_vault_bp.route('/delete/<name>', methods=['DELETE'])
 def delete_entry(name):
     """Delete the specified secret entry."""
     try:
         secret_store.remove_secret(name)
-        flash(f"Deleted '{name}'.", 'info')
         logger.info(f"Deleted secret: {name}")
-        return redirect(url_for('routes.index'))
+        return jsonify({'message': f"Deleted '{name}'."}), 200
 
     except Exception as e:
-        flash('Error deleting the secret.', 'error')
         logger.error(f"Error in delete_entry('{name}'): {e}", exc_info=True)
-        return redirect(url_for('routes.index')), 500
+        return jsonify({'error': 'Error deleting the secret.'}), 500
