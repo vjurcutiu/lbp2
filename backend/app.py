@@ -155,11 +155,11 @@ def create_app(config_object: str = None) -> Flask:
 
     SecretsLoader().load_env()
 
-    key = os.environ.get("PINECONE_API_KEY")
+    key = os.environ.get("OPENAI_API_KEY")
     if key:
-        print(f"PINECONE_API_KEY is set and begins with: {key[:8]}…")
+        print(f"OPENAI_API_KEY is set and begins with: {key[:8]}…")
     else:
-        print("PINECONE_API_KEY is not set in the environment")
+        print("OPENAI_API_KEY is not set in the environment")
 
     # Load default & override config
     app.config.from_mapping(
