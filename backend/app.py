@@ -20,6 +20,7 @@ from routes.chat_routes import create_chat_blueprint
 from routes.file_processing_routes import file_bp
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
+from routes.api_vault_routes import routes as api_vault_bp
 
 # ───> RAG integration imports
 from utils.services.agentic.query_processor import QueryProcessor
@@ -102,6 +103,7 @@ def register_blueprints(app: Flask, conv_manager: ConversationManager):
     app.register_blueprint(file_bp)
     app.register_blueprint(extra_bp, url_prefix='/extra')
     app.register_blueprint(info_bp, url_prefix='/info')
+    app.register_blueprint(api_vault_bp, url_prefix='/api-vault')
 
 
 def register_cli_commands(app: Flask):
