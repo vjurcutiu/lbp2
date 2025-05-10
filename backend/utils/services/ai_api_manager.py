@@ -34,7 +34,7 @@ class OpenAIService:
         client: Optional[OpenAI] = None,
         model_map: Optional[Dict[str, str]] = None
     ):
-        # Allow injection of a preconfigured OpenAI client
+        # Allow injection of a preconfigured OpenAI client        
         self.client = client or OpenAI()
         # Configure default models, overridable via environment variables
         self.model_map = model_map or {

@@ -31,6 +31,8 @@ from utils.search     import KeywordSearch, VectorSearch, HybridSearch
 from utils.keyword_loader import load_keyword_items, build_keyword_topics
 
 from utils.services.api_vault.secrets import ApiKeyManager
+from utils.services.api_vault.secrets_loader import SecretsLoader
+
 
 
 
@@ -140,7 +142,7 @@ def create_app(config_object: str = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
     # ── Bootstrap SECRET_KEY via keyring ──
-    SERVICE_NAME = "LexBot PRO"              # pick a sensible name
+    SERVICE_NAME = "LEXBOT_PRO"              # pick a sensible name
     KR_USERNAME  = "flask-secret-key"       # a fixed “username” for this secret
 
     secret = keyring.get_password(SERVICE_NAME, KR_USERNAME)
@@ -150,6 +152,14 @@ def create_app(config_object: str = None) -> Flask:
         keyring.set_password(SERVICE_NAME, KR_USERNAME, secret)
 
     app.config['SECRET_KEY'] = secret
+
+    SecretsLoader().load_env()
+
+    key = os.environ.get("PINECONE_API_KEY")
+    if key:
+        print(f"PINECONE_API_KEY is set and begins with: {key[:8]}…")
+    else:
+        print("PINECONE_API_KEY is not set in the environment")
 
     # Load default & override config
     app.config.from_mapping(
