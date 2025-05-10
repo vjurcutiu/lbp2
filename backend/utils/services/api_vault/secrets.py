@@ -77,3 +77,34 @@ def remove_secret(entry_name: str) -> None:
     """
     delete_secret(entry_name)
     _update_index(entry_name, adding=False)
+
+def load_all_secrets() -> dict[str, str]:
+    """
+    Load all secrets from the index and return a dictionary of entry_name -> secret_value.
+    """
+    secrets = {}
+    for entry_name in list_entries():
+        secret = fetch_secret(entry_name)
+        if secret is not None:
+            secrets[entry_name] = secret
+    return secrets
+
+class ApiKeyManager:
+    """
+    Service to manage API keys/secrets loaded from Windows Credentials Manager.
+    Loads all secrets at start and can reload after updates.
+    """
+    def __init__(self):
+        self.secrets = load_all_secrets()
+
+    def reload_secrets(self):
+        """
+        Reload all secrets from the credential store.
+        """
+        self.secrets = load_all_secrets()
+
+    def get_secret(self, entry_name: str) -> str | None:
+        """
+        Get a secret by entry name from the loaded secrets.
+        """
+        return self.secrets.get(entry_name)

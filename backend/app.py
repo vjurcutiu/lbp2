@@ -28,6 +28,8 @@ from utils.services.agentic.search_router    import SearchRouter
 from utils.search     import KeywordSearch, VectorSearch, HybridSearch
 from utils.keyword_loader import load_keyword_items, build_keyword_topics
 
+from utils.services.api_vault.secrets import ApiKeyManager
+
 
 def configure_logging(app: Flask):
     """Set up Console, File and structlog logging with UTF-8 encoding."""
@@ -158,6 +160,8 @@ def create_app(config_object: str = None) -> Flask:
     # Setup services
     notifier     = SocketNotifier(socketio, app)
     ai_service   = OpenAIService()
+    api_key_manager = ApiKeyManager()
+    app.api_key_manager = api_key_manager
 
     # Configure logging (now with UTF-8)
     configure_logging(app)
