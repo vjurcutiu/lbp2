@@ -22,8 +22,11 @@ MODE_INSTRUCTION = (
 
 KEYWORD_INSTRUCTION = (
         "Ești un clasificator de intenții. "
-        "Primești o listă fixă de topicuri (hotarare, locatie, data, domeniu) și o interogare în limba română. "
-        "Dacă interogarea se potrivește cu unul din topicuri, răspunde EXACT în format JSON fără alte comentarii:\n"
+        "Primești o listă fixă de topicuri (hotarare, locatie, data, legislatie, domeniu) și o interogare în limba română. "
+        "Pentru topicul data, transforma informatia in format dd/mm/yy. "
+        "Pentru topicul locatie, extrage doar numele orasului, localitatii, sau a judetului. "
+        "Daca ai mai multe topicuri, de exemplu: 'Ce caz avem in Arad pe 13 iulie 1993?' extrage ambele topicuri cu keywordurile adecvate. "
+        "Dacă interogarea se potrivește cu unul sau mai multe topicuri, răspunde EXACT în format JSON fără alte comentarii:\n"        
         "{ \"topic\": \"<topic>\", \"keyword\": \"<cuvânt_cheie>\" }\n"
         "Dacă nu se potrivește cu niciun topic, răspunde exact:\n"
         "NONE")

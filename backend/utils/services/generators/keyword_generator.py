@@ -224,7 +224,10 @@ def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] 
     elif method == "openai":
         instruction = (
             "You are a highly accurate AI assistant specialized in extracting information from Romanian legal documents. "
-            "Extract the following fields as a JSON object: locatie, data, domeniu, hotarare, cuvinte_cheie (list of keywords). "
+            "Extract the following fields as a JSON object: locatie, data, domeniu, hotarare, legislatie, cuvinte_cheie (list of keywords). "
+            "In locatie, only mention city, locality, country or county name, and mention all the locations found in the document. "
+            "In data, mention all the dates referenced in the document in a dd/mm/yy format. " 
+            "In legislatie, mention all the laws, regulations, statutes and other legal information found in the document."
             "Return only the JSON object.\n\n"
             "Decision text:\n"
             f"{cleaned}"
@@ -236,7 +239,7 @@ def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] 
             match = re.search(r"\{.*\}", raw)
             result = json.loads(match.group(0)) if match else {}
         kws = result.get("cuvinte_cheie", [])[:8]
-        return json.dumps({"locatie": result.get("locatie",""), "data": result.get("data",""), "domeniu": result.get("domeniu",""), "hotarare": result.get("hotarare",""), "cuvinte_cheie": kws}, ensure_ascii=False)
+        return json.dumps({"locatie": result.get("locatie",""), "data": result.get("data",""), "domeniu": result.get("domeniu",""), "hotarare": result.get("hotarare",""), "legislatie":result.get("legislatie",""), "cuvinte_cheie": kws}, ensure_ascii=False)
     else:
         extractor_map = {
             "tfidf": extract_tfidf_keywords,
@@ -251,4 +254,4 @@ def generate_keywords(text: str, method: str = "openai", flash_vocab: list[str] 
             raise ValueError(f"Unknown extraction method: {method!r}")
         keywords = extractor_map[method](cleaned)
 
-    return json.dumps({"locatie": "", "data": "", "domeniu": "", "hotarare": "", "cuvinte_cheie": keywords[:8]}, ensure_ascii=False)
+    return json.dumps({"locatie": "", "data": "", "domeniu": "", "hotarare": "", "legislatie": "", "cuvinte_cheie": keywords[:8]}, ensure_ascii=False)

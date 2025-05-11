@@ -323,7 +323,7 @@ def upsert_files_to_vector_db(chunk_size: int = 1500,
         raw_keywords = []
 
         # Keys to extract values from, excluding 'cuvinte_cheie'
-        keys_to_extract = ['locatie', 'data', 'domeniu', 'hotarare', 'keywords']
+        keys_to_extract = ['locatie', 'data', 'domeniu', 'hotarare', 'legislatie', 'keywords']
 
         for key in keys_to_extract:
             val = file_metadata.get(key)
