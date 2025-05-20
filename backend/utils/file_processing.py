@@ -187,60 +187,42 @@ def get_files_without_metadata_text():
     return results
 
 
-def process_files_for_metadata(type='keywords', progress_callback=None):
+def process_file_for_metadata(f, type='keywords'):
+    """
+    Process a single file for metadata (keywords or other type).
+    """
     meta_key = type
-    func = "process_files_for_metadata"
-    current_app.logger.info(f"[{func}] meta_key: {meta_key}")
-    try:
-        all_files = File.query.all()
-        to_process = [f for f in all_files if f.meta_data is None or (isinstance(f.meta_data, dict) and meta_key not in f.meta_data)]
-        current_app.logger.info(f"[{func}] Found {len(to_process)} files to process")
-    except Exception as e:
-        current_app.logger.error(f"[{func}] Error querying files: {e}")
-        raise
-
-    results = []
-    total = len(to_process)
-    count = 0
-    for f in to_process:
-        if os.path.exists(f.file_path):
-            text = extract_text_from_file(f.file_path)
-            current_app.logger.info(f"[{func}] Processing file: {f.file_path} with text length: {len(text)}")
-            if text:
-                try:
-                    if type == 'keywords':
-                        api_content = aii.keywords(text)
-                        current_app.logger.info(f"[{func}] Raw keywords output for {f.file_path}: {api_content}")
-                    else:
-                        api_content = aii.chat({
-                            'messages': [
-                                {'role': 'system', 'content': f'Generate {type} for this document.'},
-                                {'role': 'user', 'content': text}
-                            ]
-                        })
-                        current_app.logger.info(f"[{func}] Raw metadata output for {f.file_path}: {api_content}")
-                    f.meta_data = f.meta_data or {}
-                    f.meta_data[meta_key] = api_content
-                    results.append({'file_path': f.file_path, 'meta_data': api_content})
-                    current_app.logger.info(f"[{func}] Metadata saved for {f.file_path}")
-                except Exception as e:
-                    current_app.logger.error(
-                        f"[{func}] Error processing metadata for {f.file_path}: {e}. Text snippet: {truncate_words(text, limit=20)}",
-                        exc_info=True
-                    )
-            else:
-                current_app.logger.warning(f"[{func}] Empty text extracted from {f.file_path}")
+    func = "process_file_for_metadata"
+    if os.path.exists(f.file_path):
+        text = extract_text_from_file(f.file_path)
+        current_app.logger.info(f"[{func}] Processing file: {f.file_path} with text length: {len(text)}")
+        if text:
+            try:
+                if type == 'keywords':
+                    api_content = aii.keywords(text)
+                    current_app.logger.info(f"[{func}] Raw keywords output for {f.file_path}: {api_content}")
+                else:
+                    api_content = aii.chat({
+                        'messages': [
+                            {'role': 'system', 'content': f'Generate {type} for this document.'},
+                            {'role': 'user', 'content': text}
+                        ]
+                    })
+                    current_app.logger.info(f"[{func}] Raw metadata output for {f.file_path}: {api_content}")
+                f.meta_data = f.meta_data or {}
+                f.meta_data[meta_key] = api_content
+                current_app.logger.info(f"[{func}] Metadata saved for {f.file_path}")
+                return {'file_path': f.file_path, 'meta_data': api_content}
+            except Exception as e:
+                current_app.logger.error(
+                    f"[{func}] Error processing metadata for {f.file_path}: {e}. Text snippet: {truncate_words(text, limit=20)}",
+                    exc_info=True
+                )
         else:
-            current_app.logger.warning(f"[{func}] File not found: {f.file_path}")
-        count += 1
-        if progress_callback:
-            progress_callback(count, total)
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"[{func}] Error committing metadata: {e}")
-    return results
+            current_app.logger.warning(f"[{func}] Empty text extracted from {f.file_path}")
+    else:
+        current_app.logger.warning(f"[{func}] File not found: {f.file_path}")
+    return None
 
 def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 400) -> list[str]:
     """
@@ -280,104 +262,81 @@ def flatten_values(data):
         values.append(data)
     return values
 
-def upsert_files_to_vector_db(chunk_size: int = 1500,
-                              overlap: int = 200,
-                              progress_callback=None):
+def upsert_file_to_vector_db(f, chunk_size: int = 1500, overlap: int = 200):
     """
-    Upserts embeddings for files with metadata to Pinecone in text chunks and marks them uploaded.
-
-    Each file is split into overlapping chunks by character count, then each chunk is embedded and upserted.
+    Upserts embeddings for a single file with metadata to Pinecone in text chunks and marks it uploaded.
     """
-    to_upsert = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
-    current_app.logger.info(f"Files to upsert: {[f.file_path for f in to_upsert]}")
-    results = []
-    total = len(to_upsert)
-    count = 0
+    func = "upsert_file_to_vector_db"
     namespace = os.getenv('PINECONE_NAMESPACE')
+    client = PineconeClient(
+        environment=os.getenv("PINECONE_ENV")
+    )
 
-    client = PineconeClient()
+    if not os.path.exists(f.file_path):
+        current_app.logger.warning(f"File not found: {f.file_path}")
+        return None
 
-    for f in to_upsert:
-        if not os.path.exists(f.file_path):
-            current_app.logger.warning(f"File not found: {f.file_path}")
-            count += 1
-            if progress_callback:
-                progress_callback(count, total)
-            continue
+    text = extract_text_from_file(f.file_path)
+    if not text:
+        current_app.logger.error(f"No text extracted from {f.file_path}")
+        return None
 
-        text = extract_text_from_file(f.file_path)
-        if not text:
-            current_app.logger.error(f"No text extracted from {f.file_path}")
-            count += 1
-            if progress_callback:
-                progress_callback(count, total)
-            continue
+    chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+    current_app.logger.info(f"Split {f.file_path} into {len(chunks)} chunks")
 
-        chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-        current_app.logger.info(f"Split {f.file_path} into {len(chunks)} chunks")
+    # Prepare metadata to include keywords and other file metadata if available
+    file_metadata = f.meta_data if isinstance(f.meta_data, dict) else {}
 
-        # Prepare metadata to include keywords and other file metadata if available
-        file_metadata = f.meta_data if isinstance(f.meta_data, dict) else {}
+    # Flatten all relevant metadata values into keywords list
+    raw_keywords = []
 
-        # Flatten all relevant metadata values into keywords list
-        raw_keywords = []
+    # Keys to extract values from, excluding 'cuvinte_cheie'
+    keys_to_extract = ['locatie', 'data', 'domeniu', 'hotarare', 'legislatie', 'keywords']
 
-        # Keys to extract values from, excluding 'cuvinte_cheie'
-        keys_to_extract = ['locatie', 'data', 'domeniu', 'hotarare', 'legislatie', 'keywords']
+    for key in keys_to_extract:
+        val = file_metadata.get(key)
+        current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Processing metadata key '{key}': {val}")
+        if val:
+            # If val is a string that looks like JSON, parse it
+            if isinstance(val, str):
+                try:
+                    parsed_val = json.loads(val)
+                    current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Parsed JSON string for key '{key}': {parsed_val}")
+                    val = parsed_val
+                except Exception:
+                    # Not a JSON string, keep as is
+                    pass
+            # Flatten values recursively
+            flattened = flatten_values(val)
+            current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Flattened values for key '{key}': {flattened}")
+            raw_keywords.extend(flattened)
 
-        for key in keys_to_extract:
-            val = file_metadata.get(key)
-            current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Processing metadata key '{key}': {val}")
-            if val:
-                # If val is a string that looks like JSON, parse it
-                if isinstance(val, str):
-                    try:
-                        parsed_val = json.loads(val)
-                        current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Parsed JSON string for key '{key}': {parsed_val}")
-                        val = parsed_val
-                    except Exception:
-                        # Not a JSON string, keep as is
-                        pass
-                # Flatten values recursively
-                flattened = flatten_values(val)
-                current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Flattened values for key '{key}': {flattened}")
-                raw_keywords.extend(flattened)
+    # Deduplicate and normalize keywords
+    unique_keywords = list({str(k).lower() for k in raw_keywords if k})
 
-        # Deduplicate and normalize keywords
-        unique_keywords = list({str(k).lower() for k in raw_keywords if k})
-
-        for idx, chunk in enumerate(chunks):
-            prompt = f"Represent this document chunk for searching relevant passages: {chunk}"
-            try:
-                # Use public embeddings method
-                embeddings = aii.embeddings(prompt)
-                record = {
-                    'id': f"{f.id}_chunk_{idx}",
-                    'values': embeddings,
-                    'metadata': {
-                        'source_text': chunk,
-                        'source_file': f.file_path,
-                        'chunk_index': idx,
-                        'text_snippet': chunk[:100],
-                        'keywords': unique_keywords
-                    }
+    results = []
+    for idx, chunk in enumerate(chunks):
+        prompt = f"Represent this document chunk for searching relevant passages: {chunk}"
+        try:
+            # Use public embeddings method
+            embeddings = aii.embeddings(prompt)
+            record = {
+                'id': f"{f.id}_chunk_{idx}",
+                'values': embeddings,
+                'metadata': {
+                    'source_text': chunk,
+                    'source_file': f.file_path,
+                    'chunk_index': idx,
+                    'text_snippet': chunk[:100],
+                    'keywords': unique_keywords
                 }
-                current_app.logger.info(f"[file_processing.upsert_files_to_vector_db] Upserting chunk {idx} of file {f.file_path} with metadata keywords: {unique_keywords}")
-                vc_resp = client.upsert([record], namespace)
-                results.append({'file_path': f.file_path, 'chunk': idx, 'vector_response': vc_resp})
-            except Exception as e:
-                current_app.logger.error(f"Error upserting chunk {idx} of {f.file_path}: {e}", exc_info=True)
+            }
+            current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Upserting chunk {idx} of file {f.file_path} with metadata keywords: {unique_keywords}")
+            vc_resp = client.upsert([record], namespace)
+            results.append({'file_path': f.file_path, 'chunk': idx, 'vector_response': vc_resp})
+        except Exception as e:
+            current_app.logger.error(f"Error upserting chunk {idx} of {f.file_path}: {e}", exc_info=True)
 
-        # After all chunks upserted, mark file as uploaded
-        f.is_uploaded = True
-        count += 1
-        if progress_callback:
-            progress_callback(count, total)
-
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error committing vector upload flags: {e}")
-
+    # After all chunks upserted, mark file as uploaded
+    f.is_uploaded = True
     return results
