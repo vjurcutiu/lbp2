@@ -215,6 +215,10 @@ def create_app(config_object: str = None) -> Flask:
     register_blueprints(app, conv_manager)
     register_cli_commands(app)
 
+    # Initialize background worker thread for file processing routes
+    from routes.file_processing_routes import init_worker
+    init_worker(app)
+
     return app
 
 
