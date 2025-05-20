@@ -17,7 +17,8 @@ export const processFolder = async (folderPath, extension, onProgress) => {
 
   // 3) Listen for progress events
   eventSource.addEventListener('progress', (e) => {
-    const { value } = JSON.parse(e.data);
+    const parsed = JSON.parse(e.data);
+    const value = parsed.data.value;
     onProgress(value);
   });
 

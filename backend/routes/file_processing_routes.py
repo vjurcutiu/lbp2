@@ -170,9 +170,13 @@ def process_folder_task(folder_path: str, extensions: List[str], session_id: str
             results = {}
 
             # PHASE 1: Scan
-            session.progress = 1
+            def scan_cb(progress):
+                if session.cancelled:
+                    raise Exception("Cancelled")
+                session.progress = progress // 2  # scale to 0-50%
+            session.progress = 0
             logger.info(f"Session {session_id}: starting scan")
-            scan_res = scan_and_add_files_wrapper(folder_path, extensions)
+            scan_res = scan_and_add_files_wrapper(folder_path, extensions, progress_callback=scan_cb)
             session.file_items = scan_res.get('added', [])
             results['scan'] = scan_res
             logger.info(f"Scan completed: {len(session.file_items)} items for session {session_id}")
@@ -247,6 +251,8 @@ def stream_process_folder() -> Response:
                 yield format_sse('complete', sess.final)
                 sessions.delete(session_id)
                 break
+            # Flush the response by yielding an empty string
+            yield ''
             time.sleep(0.5)
 
     return Response(
