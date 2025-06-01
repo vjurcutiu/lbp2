@@ -28,7 +28,7 @@ const ChatInput = ({ value, onChange, onSend, placeholder, disabled }) => {
   };
 
   return (
-    <div className="flex items-center w-full p-3 bg-gray-200 dark:bg-gray-700">
+    <div className="flex items-center w-full p-3 bg-gray-100 dark:bg-gray-700">
       <Input
         ref={inputRef}
         value={value}

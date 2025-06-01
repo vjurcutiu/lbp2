@@ -28,7 +28,7 @@ const NewChat = ({ messages }) => {
   return (
     <div
       ref={containerRef}
-      className="p-2.5 overflow-y-auto h-full w-full bg-gray-200 dark:bg-gray-700 flex flex-col"
+      className="p-2.5 overflow-y-auto h-full w-full bg-gray-100 dark:bg-gray-700 flex flex-col"
     >
       <div className="flex-grow flex items-center justify-center">
       </div>
