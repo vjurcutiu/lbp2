@@ -26,6 +26,13 @@ from utils.file_processing import (
 from utils.pinecone_client import PineconeClient
 from functools import wraps
 
+# Import the refactored service and upload tracking emitters
+from services.file_processing_service import process_folder_task
+from utils.websockets.upload_tracking import (
+    emit_file_uploaded,
+    emit_file_failed,
+)
+
 # -----------------------------------------------------------------------------
 # Configuration ----------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -276,155 +283,6 @@ class SessionCleanup:
 # -----------------------------------------------------------------------------
 
 
-def process_folder_task(
-    folder_paths: List[str],
-    extensions: List[str],
-    session_id: str,
-    queue,
-    app_config: Dict[str, Any],
-) -> None:
-    """Runs in a worker process — scans folders, then handles per‑file work in a
-    *thread* pool (max ``MAX_PARALLEL_WORKERS`` threads) to avoid nesting process
-    pools. Progress updates are pushed to the SSE queue.
-    
-    **NOTE:** We *do not* pass the Flask ``app`` object itself – only its *config*
-    (a plain ``dict``) because the app instance is not picklable on Windows /
-    macOS‑spawn. A lightweight ad‑hoc ``Flask`` object is created inside the
-    worker so that any code that needs ``current_app`` continues to work.
-    """
-
-    # --- Ensure logging in worker writes to the main log file ---
-    log_path = os.path.join(os.path.dirname(__file__), "..", "instance", "logs", "app.log")
-    log_path = os.path.abspath(log_path)
-    file_handler = logging.FileHandler(log_path)
-    file_handler.setFormatter(logging.Formatter(
-        "{"  # opening brace for JSON object
-        "\"timestamp\": \"%(asctime)s\", "
-        "\"level\": \"%(levelname)s\", "
-        "\"module\": \"%(module)s\", "
-        "\"funcName\": \"%(funcName)s\", "
-        "\"lineno\": %(lineno)d, "
-        "\"message\": \"%(message)s\""
-        "}"
-    ))
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    # Avoid duplicate handlers
-    if not any(isinstance(h, logging.FileHandler) and h.baseFilename == file_handler.baseFilename for h in root_logger.handlers):
-        root_logger.addHandler(file_handler)
-    logger.addHandler(file_handler)
-
-    logger.info(
-        "Task started for session %s (folders=%s, exts=%s, workers=%s)",
-        session_id,
-        folder_paths,
-        extensions,
-        MAX_PARALLEL_WORKERS,
-    )
-
-    # Re‑hydrate a minimal Flask app in this process
-    app = Flask(__name__)
-    app.config.update(app_config)
-    from db.models import db
-    db.init_app(app)
-
-    with app.app_context():
-        # ------------------------------------------------------------------
-        # Phase 1: Scan folders --------------------------------------------
-        # ------------------------------------------------------------------
-
-        def scan_cb(progress: int) -> None:
-            queue.put({"progress": progress // 2})  # first 0‑50 %
-
-        queue.put({"progress": 0})
-        all_added: List[Any] = []
-        for folder in folder_paths:
-            logger.debug("Scanning folder %s", folder)
-            res = scan_and_add_files_wrapper(
-                folder, extensions, progress_callback=scan_cb
-            )
-            all_added.extend(res.get("added", []))
-
-        # Let the client know what we found straight away
-        queue.put({"scan": all_added})
-        logger.info("Scan phase complete — %d files added", len(all_added))
-
-        files = all_added
-        total = max(len(files), 1)
-
-        # Helper to send mid‑phase progress --------------------------------
-        def _progress(phase_base: int, idx: int) -> int:
-            return phase_base + (50 * idx) // total  # each phase is 0‑50 or 50‑100
-
-        # ------------------------------------------------------------------
-        # Phase 2: Metadata extraction -------------------------------------
-        # ------------------------------------------------------------------
-        from utils.file_processing import process_file_for_metadata
-        from db.models import File, db
-
-        meta_files = File.query.all()
-        to_process = [f for f in meta_files if f.meta_data is None or (isinstance(f.meta_data, dict) and "keywords" not in f.meta_data)]
-        logger.info(f"[process_folder_task] Found {len(to_process)} files to process for metadata")
-
-        results = []
-        app_ctx = Flask(__name__)
-        app_ctx.config.update(app_config)
-        from db.models import db as db_ctx
-        db_ctx.init_app(app_ctx)
-
-        def process_file_with_context(f):
-            with app_ctx.app_context():
-                return process_file_for_metadata(f)
-
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            for res in executor.map(process_file_with_context, to_process):
-                results.append(res)
-        with app_ctx.app_context():
-            try:
-                db_ctx.session.commit()
-            except Exception as e:
-                db_ctx.session.rollback()
-                logger.error(f"[process_folder_task] Error committing metadata: {e}")
-
-        queue.put({"progress": 50})
-        logger.info(
-            "Metadata phase complete — processed all files in parallel"
-        )
-
-        # ------------------------------------------------------------------
-        # Phase 3: Vector upsert -------------------------------------------
-        # ------------------------------------------------------------------
-        from utils.file_processing import upsert_file_to_vector_db
-
-        upsert_files = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
-        logger.info(f"[process_folder_task] Found {len(upsert_files)} files to upsert to vector DB")
-
-        def upsert_file_with_context(f):
-            with app_ctx.app_context():
-                return upsert_file_to_vector_db(f)
-
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            for _ in executor.map(upsert_file_with_context, upsert_files):
-                pass
-        with app_ctx.app_context():
-            try:
-                db_ctx.session.commit()
-            except Exception as e:
-                db_ctx.session.rollback()
-                logger.error(f"[process_folder_task] Error committing vector upload flags: {e}")
-
-        queue.put({"progress": 100})
-        logger.info(
-            "Vector upsert phase complete — processed all files in parallel"
-        )
-
-        # ------------------------------------------------------------------
-        # Done -------------------------------------------------------------
-        # ------------------------------------------------------------------
-        queue.put({"complete": True})
-        logger.info("Task complete for session %s", session_id)
-
-
 # -----------------------------------------------------------------------------
 # Module‑level helpers for the pool  ------------------------------------------
 # -----------------------------------------------------------------------------
@@ -533,7 +391,13 @@ def stream_process_folder() -> Response:
                     # Cache files on the session so cleanup can work later
                     session.file_items = msg["scan"]
                     yield format_sse("scan", {"files": msg["scan"]})
+                elif "file" in msg:
+                    if msg["success"]:
+                        emit_file_uploaded(msg["session_id"], msg["file"])
+                    else:
+                        emit_file_failed(msg["session_id"], msg["file"], msg["error"])
                 elif "complete" in msg:
+                    session.final = msg.get("summary", {})
                     yield format_sse("complete", session.final or {})
                     sessions.delete(session_id)
                     logger.info(
