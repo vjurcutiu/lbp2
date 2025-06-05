@@ -200,7 +200,7 @@ def process_file_for_metadata(f, type='keywords'):
             try:
                 if type == 'keywords':
                     api_content = aii.keywords(text)
-                    current_app.logger.info(f"[{func}] Raw keywords output for {f.file_path}: {api_content}")
+                    """current_app.logger.info(f"[{func}] Raw keywords output for {f.file_path}: {api_content}")"""
                 else:
                     api_content = aii.chat({
                         'messages': [
@@ -295,20 +295,20 @@ def upsert_file_to_vector_db(f, chunk_size: int = 1500, overlap: int = 200):
 
     for key in keys_to_extract:
         val = file_metadata.get(key)
-        current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Processing metadata key '{key}': {val}")
+        """current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Processing metadata key '{key}': {val}")"""
         if val:
             # If val is a string that looks like JSON, parse it
             if isinstance(val, str):
                 try:
                     parsed_val = json.loads(val)
-                    current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Parsed JSON string for key '{key}': {parsed_val}")
+                    """current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Parsed JSON string for key '{key}': {parsed_val}")"""
                     val = parsed_val
                 except Exception:
                     # Not a JSON string, keep as is
                     pass
             # Flatten values recursively
             flattened = flatten_values(val)
-            current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Flattened values for key '{key}': {flattened}")
+            """current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Flattened values for key '{key}': {flattened}")"""
             raw_keywords.extend(flattened)
 
     # Deduplicate and normalize keywords
@@ -331,7 +331,7 @@ def upsert_file_to_vector_db(f, chunk_size: int = 1500, overlap: int = 200):
                     'keywords': unique_keywords
                 }
             }
-            current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Upserting chunk {idx} of file {f.file_path} with metadata keywords: {unique_keywords}")
+            """current_app.logger.info(f"[file_processing.upsert_file_to_vector_db] Upserting chunk {idx} of file {f.file_path} with metadata keywords: {unique_keywords}")"""
             vc_resp = client.upsert([record], namespace)
             results.append({'file_path': f.file_path, 'chunk': idx, 'vector_response': vc_resp})
         except Exception as e:

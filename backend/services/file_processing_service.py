@@ -12,7 +12,8 @@ def process_folder_task(
     folder_paths: List[str],
     extensions: List[str],
     session_id: str,
-    queue,
+    sse_queue,
+    ws_queue,
     app_config: Dict[str, Any],
 ) -> None:
     """Runs in a worker process — scans folders, then handles per-file work in a
@@ -56,20 +57,22 @@ def process_folder_task(
     with app.app_context():
         # Phase 1: Scan folders
         def scan_cb(progress: int) -> None:
-            queue.put({"progress": progress // 2})  # first 0-50%
+            sse_queue.put({"progress": progress // 2})  # first 0-50%}
 
-        queue.put({"progress": 0})
+        sse_queue.put({"progress": 0})
         all_added: List[Any] = []
         for folder in folder_paths:
             logger.debug("Scanning folder %s", folder)
             res = scan_and_add_files_wrapper(folder, extensions, progress_callback=scan_cb)
             all_added.extend(res.get("added", []))
 
-        queue.put({"scan": all_added})
+        sse_queue.put({"scan": all_added})
         logger.info("Scan phase complete — %d files added", len(all_added))
 
         # Notify frontend about upload start
-        queue.put({"upload_started": len(all_added), "session_id": session_id})
+        import logging
+        logging.getLogger(__name__).info(f"Enqueueing upload_started with count {len(all_added)} for session {session_id}")
+        ws_queue.put({"upload_started": len(all_added), "session_id": session_id})
 
         files = all_added
         total = max(len(files), 1)
@@ -137,7 +140,7 @@ def process_folder_task(
 
         # Enqueue per-file events for SSE/WebSocket bridge
         for file_path, (success, error) in combined_results.items():
-            queue.put({
+            ws_queue.put({
                 "file": file_path,
                 "success": success,
                 "error": error,
@@ -158,6 +161,6 @@ def process_folder_task(
             "failed_files": failed_files,
         }
         # Final summary
-        queue.put({"complete": True, "summary": summary, "session_id": session_id})
+        ws_queue.put({"complete": True, "summary": summary, "session_id": session_id})
 
         logger.info("Task complete for session %s", session_id)

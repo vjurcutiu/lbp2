@@ -18,6 +18,8 @@ def handle_connect():
     session_id = request.args.get('session_id')
     if session_id:
         join_upload_room(session_id)
+        # Send a test message to client after joining room
+        emit('test_message', {'message': 'Test message from server'}, room=session_id, namespace='/upload')
     print(f"Client connected to upload namespace with session_id={session_id}")
     emit('server_response', {'data': 'Connected to Flask WebSocket server!'}, namespace='/upload')
 

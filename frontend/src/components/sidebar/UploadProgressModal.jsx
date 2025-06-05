@@ -16,6 +16,15 @@ const UploadProgressModal = ({ onCancel }) => {
     failedFiles,
     isComplete,
   } = useSelector((state) => state.uploadTracking);
+
+  console.log('UploadProgressModal render with state:', {
+    totalFiles,
+    uploadedCount,
+    uploadedFiles,
+    failedFiles,
+    isComplete,
+  });
+
   const dispatch = useDispatch();
 
   const handleClose = () => {

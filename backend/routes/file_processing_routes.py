@@ -157,8 +157,8 @@ class ProcessingSession:
     final: Optional[Dict[str, Any]] = None
     cancelled: bool = False
     file_items: List[Any] = field(default_factory=list)
-    queue: Any = None  # multiprocessing.Queue — but not type‑checked
-
+    sse_queue: Any = None  # multiprocessing.Queue for SSE events
+    ws_queue: Any = None   # multiprocessing.Queue for WebSocket events
 
 class SessionStore:
     """In‑memory store of active ProcessingSession objects."""
@@ -171,7 +171,8 @@ class SessionStore:
         session_id = uuid.uuid4().hex
         sess = ProcessingSession(session_id=session_id)
         init_multiprocessing()
-        sess.queue = manager.Queue()
+        sess.sse_queue = manager.Queue()
+        sess.ws_queue = manager.Queue()
         self._store[session_id] = sess
         logger.info("Created new session %s", session_id)
         return sess
@@ -333,13 +334,15 @@ def start_process_folder() -> Response:
     def log_worker_error(e):
         logger.error("process_folder_task failed: %s", e, exc_info=True)
 
+    # Pass both SSE and WebSocket queues to the worker
     pool.apply_async(
         process_folder_task,
         args=(
             payload.folder_paths,
             payload.extensions,
             session.session_id,
-            session.queue,
+            session.sse_queue,
+            session.ws_queue,
             app_config,
         ),
         error_callback=log_worker_error,
@@ -362,6 +365,8 @@ def test_pool() -> Response:
     return jsonify({"status": "Pool test task submitted"}), 200
 
 
+import threading
+
 @file_bp.route("/process_folder", methods=["GET"])
 @log_call(logging.INFO)
 def stream_process_folder() -> Response:
@@ -381,11 +386,22 @@ def stream_process_folder() -> Response:
             mimetype="text/event-stream",
         )
 
+    # Start websocket event listener thread if not already started
+    if not hasattr(session, "ws_listener_thread") or not session.ws_listener_thread.is_alive():
+        session.stop_ws_listener = threading.Event()
+        from utils.websockets.upload_tracking import websocket_event_listener
+        session.ws_listener_thread = threading.Thread(
+            target=websocket_event_listener,
+            args=(session.ws_queue, session_id, session.stop_ws_listener),
+            daemon=True,
+        )
+        session.ws_listener_thread.start()
+
     def event_stream():
         logger.info("Client connected to stream for session %s", session_id)
         while True:
             try:
-                msg = session.queue.get(timeout=1)
+                msg = session.sse_queue.get(timeout=1)
                 logger.debug("SSE message: %s", msg)
                 if "progress" in msg:
                     yield format_sse("progress", {"value": msg["progress"]})
@@ -393,17 +409,12 @@ def stream_process_folder() -> Response:
                     # Cache files on the session so cleanup can work later
                     session.file_items = msg["scan"]
                     yield format_sse("scan", {"files": msg["scan"]})
-                elif "upload_started" in msg:
-                    emit_upload_started(msg["session_id"], msg["upload_started"])
-                elif "file" in msg:
-                    if msg["success"]:
-                        emit_file_uploaded(msg["session_id"], msg["file"])
-                    else:
-                        emit_file_failed(msg["session_id"], msg["file"], msg["error"])
                 elif "complete" in msg:
                     session.final = msg.get("summary", {})
                     yield format_sse("complete", session.final or {})
-                    emit_upload_complete(msg["session_id"], session.final)
+                    # Stop websocket listener thread
+                    if hasattr(session, "stop_ws_listener"):
+                        session.stop_ws_listener.set()
                     sessions.delete(session_id)
                     logger.info(
                         "Session %s completed and removed", session_id

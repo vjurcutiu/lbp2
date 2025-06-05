@@ -6,16 +6,19 @@ class SocketService {
   }
 
   // Connect to the Socket.IO server at the provided URL
-  connect(url) {
-    // Ensure we don't create multiple connections
-    if (!this.socket) {
-      this.socket = io(url, {
-        transports: ['websocket'],
-      });
-      this.socket.on('connect', () => {
-        console.log('Connected to Socket.IO server');
-      });
+  connect(url, options = {}) {
+    // Always create a new connection, disconnecting existing one if any
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
+    this.socket = io(url, {
+      transports: ['websocket'],
+      ...options,
+    });
+    this.socket.on('connect', () => {
+      console.log('Connected to Socket.IO server');
+    });
   }
 
   // Disconnect from the Socket.IO server
