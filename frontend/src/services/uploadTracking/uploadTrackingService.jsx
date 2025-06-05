@@ -11,7 +11,9 @@ class UploadTrackingService {
     if (this.socket) {
       this.socket.disconnect();
     }
-    this.socket = socketService.connect(`http://localhost:5000?session_id=${sessionId}`);
+    const port = this.store.getState().port.flaskPort || 5000;
+    socketService.connect(`http://localhost:${port}/upload?session_id=${sessionId}`);
+    this.socket = socketService.socket;
     this.socket.on('connect', () => {
       console.log('Connected to upload WebSocket');
     });

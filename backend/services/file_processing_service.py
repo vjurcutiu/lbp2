@@ -11,7 +11,6 @@ from utils.websockets.upload_tracking import (
     emit_file_failed,
     emit_upload_complete,
 )
-from utils.websockets.sockets import socketio
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +74,8 @@ def process_folder_task(
         queue.put({"scan": all_added})
         logger.info("Scan phase complete — %d files added", len(all_added))
 
-        # Emit upload_started event
-        # emit_upload_started(session_id, len(all_added))
+        # Notify frontend about upload start via WebSocket
+        emit_upload_started(session_id, len(all_added))
 
         files = all_added
         total = max(len(files), 1)
@@ -142,7 +141,7 @@ def process_folder_task(
         for f, success, error in upsert_results:
             combined_results[f.file_path] = (success, error)
 
-        # Emit events per file
+        # Emit per-file results via WebSocket
         for file_path, (success, error) in combined_results.items():
             if success:
                 emit_file_uploaded(session_id, file_path)
@@ -162,7 +161,8 @@ def process_folder_task(
             "uploaded_files": uploaded_files,
             "failed_files": failed_files,
         }
+        # Final summary via WebSocket
         emit_upload_complete(session_id, summary)
+        queue.put({"complete": True})
 
         logger.info("Task complete for session %s", session_id)
-        queue.put({"complete": True})
