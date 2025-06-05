@@ -5,13 +5,6 @@ from typing import List, Dict, Any
 from flask import Flask
 from db.models import File, db
 from utils.file_processing import scan_and_add_files_wrapper, process_file_for_metadata, upsert_file_to_vector_db
-from utils.websockets.upload_tracking import (
-    emit_upload_started,
-    emit_file_uploaded,
-    emit_file_failed,
-    emit_upload_complete,
-)
-from utils.websockets.sockets import socketio
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +68,8 @@ def process_folder_task(
         queue.put({"scan": all_added})
         logger.info("Scan phase complete — %d files added", len(all_added))
 
-        # Emit upload_started event
-        # emit_upload_started(session_id, len(all_added))
+        # Notify frontend about upload start
+        queue.put({"upload_started": len(all_added), "session_id": session_id})
 
         files = all_added
         total = max(len(files), 1)
@@ -142,12 +135,14 @@ def process_folder_task(
         for f, success, error in upsert_results:
             combined_results[f.file_path] = (success, error)
 
-        # Emit events per file
+        # Enqueue per-file events for SSE/WebSocket bridge
         for file_path, (success, error) in combined_results.items():
-            if success:
-                emit_file_uploaded(session_id, file_path)
-            else:
-                emit_file_failed(session_id, file_path, error)
+            queue.put({
+                "file": file_path,
+                "success": success,
+                "error": error,
+                "session_id": session_id,
+            })
 
         # Emit upload complete summary
         total_files = len(combined_results)
@@ -162,7 +157,7 @@ def process_folder_task(
             "uploaded_files": uploaded_files,
             "failed_files": failed_files,
         }
-        emit_upload_complete(session_id, summary)
+        # Final summary
+        queue.put({"complete": True, "summary": summary, "session_id": session_id})
 
         logger.info("Task complete for session %s", session_id)
-        queue.put({"complete": True})
