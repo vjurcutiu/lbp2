@@ -29,8 +29,10 @@ from functools import wraps
 # Import the refactored service and upload tracking emitters
 from services.file_processing_service import process_folder_task
 from utils.websockets.upload_tracking import (
+    emit_upload_started,
     emit_file_uploaded,
     emit_file_failed,
+    emit_upload_complete,
 )
 
 # -----------------------------------------------------------------------------
@@ -391,6 +393,8 @@ def stream_process_folder() -> Response:
                     # Cache files on the session so cleanup can work later
                     session.file_items = msg["scan"]
                     yield format_sse("scan", {"files": msg["scan"]})
+                elif "upload_started" in msg:
+                    emit_upload_started(msg["session_id"], msg["upload_started"])
                 elif "file" in msg:
                     if msg["success"]:
                         emit_file_uploaded(msg["session_id"], msg["file"])
@@ -399,6 +403,7 @@ def stream_process_folder() -> Response:
                 elif "complete" in msg:
                     session.final = msg.get("summary", {})
                     yield format_sse("complete", session.final or {})
+                    emit_upload_complete(msg["session_id"], session.final)
                     sessions.delete(session_id)
                     logger.info(
                         "Session %s completed and removed", session_id

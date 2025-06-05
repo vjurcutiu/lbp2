@@ -15,6 +15,8 @@ import {
 } from '../../services/storage/features/conversationSlice';
 import { renameConversation, deleteConversation } from '../../services';
 import { processFolder, cancelProcessFolder } from '../../services/folderApi';
+import UploadTrackingService from '../../services/uploadTracking/uploadTrackingService';
+import { store } from '../../services/storage/store';
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -31,6 +33,8 @@ const ConversationSidebar = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentSession, setCurrentSession] = useState({ id: null, es: null });
+
+  const uploadTrackingRef = useRef(new UploadTrackingService(store));
 
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
@@ -112,15 +116,20 @@ const ConversationSidebar = () => {
         (progress) => setUploadProgress(progress)
       );
 
+      uploadTrackingRef.current.connect(sessionId);
+
       setCurrentSession({ id: sessionId, es: eventSource });
 
       await resultPromise;
+
+      uploadTrackingRef.current.disconnect();
 
       dispatch(generateNewConversationThunk());
       setShowProgressModal(false);
       setCurrentSession({ id: null, es: null });
     } catch (err) {
       console.warn(err.message);
+      uploadTrackingRef.current.disconnect();
       setShowProgressModal(false);
       setCurrentSession({ id: null, es: null });
     }
@@ -130,6 +139,7 @@ const ConversationSidebar = () => {
     if (currentSession.es) {
       currentSession.es.close();
     }
+    uploadTrackingRef.current.disconnect();
     try {
       await cancelProcessFolder(currentSession.id);
     } catch (err) {
