@@ -3,6 +3,7 @@ import io from 'socket.io-client';
 class SocketService {
   constructor() {
     this.socket = null;
+    this.heartbeatInterval = null;
   }
 
   // Connect to the Socket.IO server at the provided URL
@@ -18,6 +19,23 @@ class SocketService {
     });
     this.socket.on('connect', () => {
       console.log('Connected to Socket.IO server');
+      // Start sending heartbeat pings every 25 seconds to keep connection alive
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+      }
+      this.heartbeatInterval = setInterval(() => {
+        if (this.socket && this.socket.connected) {
+          this.socket.emit('heartbeat', { timestamp: Date.now() });
+          console.log('Sent heartbeat ping');
+        }
+      }, 25000);
+    });
+    this.socket.on('disconnect', () => {
+      console.log('Disconnected from Socket.IO server');
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
     });
   }
 
@@ -26,6 +44,10 @@ class SocketService {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
       console.log('Disconnected from Socket.IO server');
     }
   }

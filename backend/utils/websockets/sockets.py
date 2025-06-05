@@ -39,3 +39,9 @@ def handle_message(data):
         response = {'data': 'Message received'}
     # Emit the response back to the client
     emit('server_response', response, namespace='/upload')
+
+@socketio.on('heartbeat', namespace='/upload')
+def handle_heartbeat(data):
+    print(f"Received heartbeat ping: {data}")
+    # Optionally, send a pong or acknowledgment back
+    emit('heartbeat_ack', {'timestamp': data.get('timestamp')}, namespace='/upload')

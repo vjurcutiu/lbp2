@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable
+import queue
+import time
 
 from flask import (
     Blueprint,
@@ -399,6 +401,7 @@ def stream_process_folder() -> Response:
 
     def event_stream():
         logger.info("Client connected to stream for session %s", session_id)
+        last_ping = 0
         while True:
             try:
                 msg = session.sse_queue.get(timeout=1)
@@ -420,9 +423,15 @@ def stream_process_folder() -> Response:
                         "Session %s completed and removed", session_id
                     )
                     break
+            except queue.Empty:
+                if time.time() - last_ping >= 10:
+                    # Send a comment line as a keep-alive ping every 10s
+                    yield ": ping\n\n"
+                    last_ping = time.time()
+                continue
+
             except Exception:
                 # queue.Empty or others — keep connection alive without burning CPU
-                import time
 
                 time.sleep(0.2)
                 continue
