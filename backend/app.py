@@ -210,17 +210,22 @@ if __name__ == "__main__":
     # Required on Windows / macOS-spawn so that child processes can start cleanly
     from multiprocessing import freeze_support
     from multiprocessing import Manager, Pool
-    from routes.file_processing_routes import set_multiprocessing_primitives, SessionStore
+    from multiprocessing import freeze_support, Manager, Pool
+    from services.mp_init import set_pool_and_manager
+    from services.session_store import SessionStore
+    from routes.file_processing_routes import set_session_store
 
     freeze_support()
 
-    app  = create_app()
+    app = create_app()
 
     # --- Multiprocessing-safe initialization ---
     manager = Manager()
     pool = Pool()
     sessions = SessionStore()
-    set_multiprocessing_primitives(manager, pool, sessions)
+
+    set_pool_and_manager(manager, pool)
+    set_session_store(sessions)
     app.sessions = sessions
 
     port = get_free_port()
