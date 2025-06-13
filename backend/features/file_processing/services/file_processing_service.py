@@ -1,10 +1,9 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any
-
 from flask import Flask
 from db.models import File, db
-from utils.file_processing import scan_and_add_files_wrapper, process_file_for_metadata, upsert_file_to_vector_db
+from features.file_processing.utils.file_pipeline import scan_and_add_files_wrapper, process_file_for_metadata, upsert_file_to_vector_db
 
 logger = logging.getLogger(__name__)
 
@@ -12,22 +11,19 @@ def process_folder_task(
     folder_paths: List[str],
     extensions: List[str],
     session_id: str,
-    sse_queue,
     ws_queue,
     app_config: Dict[str, Any],
 ) -> None:
-    """Runs in a worker process — scans folders, then handles per-file work in a
-    thread pool (max workers) to avoid nesting process pools. Emits WebSocket events
-    for upload progress and results."""
-
-    # --- Setup logging to main log file ---
+    """
+    Worker process: scans folders, processes files in parallel, and puts websocket events on ws_queue.
+    """
     import os
     import logging
     log_path = os.path.join(os.path.dirname(__file__), "..", "instance", "logs", "app.log")
     log_path = os.path.abspath(log_path)
     file_handler = logging.FileHandler(log_path)
     file_handler.setFormatter(logging.Formatter(
-        "{"
+        "{" 
         "\"timestamp\": \"%(asctime)s\", "
         "\"level\": \"%(levelname)s\", "
         "\"module\": \"%(module)s\", "
@@ -42,46 +38,27 @@ def process_folder_task(
         root_logger.addHandler(file_handler)
     logger.addHandler(file_handler)
 
-    logger.info(
-        "Task started for session %s (folders=%s, exts=%s)",
-        session_id,
-        folder_paths,
-        extensions,
-    )
+    logger.info("Task started for session %s (folders=%s, exts=%s)", session_id, folder_paths, extensions)
 
-    # Rehydrate minimal Flask app context
     app = Flask(__name__)
     app.config.update(app_config)
     db.init_app(app)
 
     with app.app_context():
-        # Phase 1: Scan folders
-        def scan_cb(progress: int) -> None:
-            sse_queue.put({"progress": progress // 2})  # first 0-50%}
-
-        sse_queue.put({"progress": 0})
+        # Scan phase
         all_added: List[Any] = []
         for folder in folder_paths:
-            logger.debug("Scanning folder %s", folder)
-            res = scan_and_add_files_wrapper(folder, extensions, progress_callback=scan_cb)
+            res = scan_and_add_files_wrapper(folder, extensions)
             all_added.extend(res.get("added", []))
 
-        sse_queue.put({"scan": all_added})
-        logger.info("Scan phase complete — %d files added", len(all_added))
-
-        # Notify frontend about upload start
-        import logging
-        logging.getLogger(__name__).info(f"Enqueueing upload_started with count {len(all_added)} for session {session_id}")
         ws_queue.put({"upload_started": len(all_added), "session_id": session_id})
 
         files = all_added
         total = max(len(files), 1)
 
-        # Phase 2: Metadata extraction
+        # Metadata extraction
         meta_files = File.query.all()
         to_process = [f for f in meta_files if f.meta_data is None or (isinstance(f.meta_data, dict) and "keywords" not in f.meta_data)]
-        logger.info(f"Found {len(to_process)} files to process for metadata")
-
         results = []
         app_ctx = Flask(__name__)
         app_ctx.config.update(app_config)
@@ -107,10 +84,8 @@ def process_folder_task(
                 db_ctx.session.rollback()
                 logger.error(f"Error committing metadata: {e}")
 
-        # Phase 3: Vector upsert
+        # Vector upsert
         upsert_files = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
-        logger.info(f"Found {len(upsert_files)} files to upsert to vector DB")
-
         def upsert_file_with_context(f):
             with app_ctx.app_context():
                 try:
@@ -138,7 +113,7 @@ def process_folder_task(
         for f, success, error in upsert_results:
             combined_results[f.file_path] = (success, error)
 
-        # Enqueue per-file events for SSE/WebSocket bridge
+        # Per-file events for websocket
         for file_path, (success, error) in combined_results.items():
             ws_queue.put({
                 "file": file_path,
@@ -147,7 +122,7 @@ def process_folder_task(
                 "session_id": session_id,
             })
 
-        # Emit upload complete summary
+        # Upload complete summary
         total_files = len(combined_results)
         uploaded_files = sum(1 for success, _ in combined_results.values() if success)
         failed_files = [
@@ -160,7 +135,5 @@ def process_folder_task(
             "uploaded_files": uploaded_files,
             "failed_files": failed_files,
         }
-        # Final summary
         ws_queue.put({"complete": True, "summary": summary, "session_id": session_id})
-
         logger.info("Task complete for session %s", session_id)

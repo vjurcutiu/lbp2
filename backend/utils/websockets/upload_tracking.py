@@ -89,3 +89,4 @@ def websocket_event_listener(ws_queue, session_id, stop_event):
         except Exception:
             time.sleep(0.1)
     logger.info(f"Websocket event listener stopped for session {session_id}")
+
