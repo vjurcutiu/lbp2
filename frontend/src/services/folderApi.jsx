@@ -1,55 +1,47 @@
 // folderApi.jsx
 
-import apiClient, { createSSEConnection } from './apiClient';
+import apiClient from './apiClient';
+// IMPORTANT: import your singleton or context instance of UploadTrackingService!
+import uploadTrackingService from '../features/uploadTracking/uploadTrackingService'; // Adjust path as needed
 
-export const processFolder = async (folderPath, extension, onProgress) => {
+
+/**
+ * Starts a folder processing job and connects to the WebSocket for progress.
+ * @param {string|string[]} folderPath - Path(s) to process.
+ * @param {string|string[]} extension - Extension(s) to process.
+ * @param {object} [options] - { store: Redux store instance (optional, only if not singleton service) }
+ * @returns {Promise<string>} - Resolves to the sessionId for this upload.
+ */
+export const processFolder = async (folderPath, extension, options = {}) => {
   // 1) Kick off the job and get a session ID
   const folderPaths = Array.isArray(folderPath) ? folderPath : [folderPath];
   const extensions = Array.isArray(extension) ? extension : [extension || ".txt"];
-  const { sessionId } = await apiClient.post('/files/process_folder', {
+  const response = await apiClient.post('/files/process_folder', {
     folder_paths: folderPaths,
-    extensions: extensions
+    extensions: extensions,
   });
+  const { sessionId } = response;
   if (!sessionId) throw new Error('Missing session ID in response.');
 
-  // 2) Open the SSE connection for progress updates
-  const eventSource = createSSEConnection(
-    `/files/process_folder?session_id=${sessionId}`
-  );
+  // 2) Connect to the WebSocket for real-time progress tracking
+  // If using a global service (preferred), just call connect:
+  uploadTrackingService.connect(sessionId);
 
-  // 3) Listen for progress events
-  eventSource.addEventListener('progress', (e) => {
-    const parsed = JSON.parse(e.data);
-    const value = parsed.data.value;
-    onProgress(value);
-  });
+  // If you need to use a store-aware instance (less common), you could do:
+  // if (options.store) {
+  //   const tempService = new UploadTrackingService(options.store);
+  //   tempService.connect(sessionId);
+  // }
 
-  // 4) Wrap the final “complete” and any SSE error into a promise
-  const resultPromise = new Promise((resolve, reject) => {
-    eventSource.addEventListener('complete', (e) => {
-      const data = JSON.parse(e.data);
-      if (data.error) {
-        // e.g. “Processing cancelled by user”
-        reject(new Error(data.error));
-      } else {
-        resolve(data);
-      }
-      eventSource.close();
-    });
-
-    eventSource.addEventListener('error', (err) => {
-      const msg = err?.message || 'Unknown SSE error';
-      reject(new Error(`SSE Error: ${msg}`));
-      eventSource.close();
-    });
-  });
-
-  // 5) Return the session ID, the EventSource, and the promise for final results
-  return { sessionId, eventSource, resultPromise };
+  // 3) Return sessionId for use in your UI (e.g., to trigger modal, etc.)
+  return sessionId;
 };
 
-// —————————————————————————————————————————————
-// New helper: cancel an in‑flight processing session
+/**
+ * Cancels a processing session.
+ * @param {string} sessionId
+ * @returns {Promise<void>}
+ */
 export const cancelProcessFolder = async (sessionId) => {
   if (!sessionId) throw new Error('No sessionId provided');
   await apiClient.post('/files/process_folder/cancel', {

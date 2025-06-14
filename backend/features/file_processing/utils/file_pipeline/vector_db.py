@@ -2,9 +2,9 @@ import os
 import json
 from flask import current_app
 from utils.pinecone_client import PineconeClient
-from text_extraction import extract_text_from_file
-from chunking import chunk_text
-from utils_flatten import flatten_values
+from .text_extraction import extract_text_from_file
+from .chunking import chunk_text
+from .utils_flatten import flatten_values
 from utils.services.ai_api_manager import OpenAIService
 
 aii = OpenAIService()

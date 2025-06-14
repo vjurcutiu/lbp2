@@ -1,5 +1,6 @@
-import socketService from '../websocket/socketService';
+import socketService from '../../services/websocket/socketService';
 import { uploadStarted, fileUploaded, fileFailed, uploadComplete, resetUpload } from './uploadTrackingSlice';
+import {store} from '../../services/storage/store'
 
 class UploadTrackingService {
   constructor(store) {
@@ -7,6 +8,9 @@ class UploadTrackingService {
     this.socket = null;
   }
 
+  setStore(store) {
+    this.store = store;
+  }
   connect(sessionId) {
     console.log('Connecting to upload WebSocket with sessionId:', sessionId);
     if (this.socket) {
@@ -78,4 +82,5 @@ class UploadTrackingService {
   }
 }
 
-export default UploadTrackingService;
+const uploadTrackingService = new UploadTrackingService();
+export default uploadTrackingService;

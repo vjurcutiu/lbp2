@@ -2,7 +2,7 @@ import os
 from flask import current_app
 from sqlalchemy import or_
 from db.models import File
-from text_extraction import extract_text_from_file
+from .text_extraction import extract_text_from_file
 from utils.services.ai_api_manager import OpenAIService
 
 aii = OpenAIService()

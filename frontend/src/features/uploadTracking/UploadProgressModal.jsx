@@ -6,7 +6,7 @@ import {
   fileFailed,
   uploadComplete,
   resetUpload,
-} from '../../services/uploadTracking/uploadTrackingSlice';
+} from './uploadTrackingSlice';
 
 const UploadProgressModal = ({ onCancel }) => {
   const {

@@ -19,8 +19,10 @@ def process_folder_task(
     """
     import os
     import logging
-    log_path = os.path.join(os.path.dirname(__file__), "..", "instance", "logs", "app.log")
-    log_path = os.path.abspath(log_path)
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    log_path = os.path.join(project_root, "instance", "logs", "app.log")
+    log_dir = os.path.dirname(log_path)
+    os.makedirs(log_dir, exist_ok=True) 
     file_handler = logging.FileHandler(log_path)
     file_handler.setFormatter(logging.Formatter(
         "{" 

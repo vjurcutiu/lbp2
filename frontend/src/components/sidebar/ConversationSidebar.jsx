@@ -5,7 +5,7 @@ import FolderBrowseButton from './FolderBrowseButton';
 import ContextMenu from './ContextMenu';
 import RenameModal from './RenameModal';
 import DeleteModal from './DeleteModal';
-import UploadProgressModal from './UploadProgressModal';
+import UploadProgressModal from '../../features/uploadTracking/UploadProgressModal';
 import KeyModal from './KeyModal';
 import { BsThreeDotsVertical } from 'react-icons/bs';
 import { FaSearch, FaKey } from 'react-icons/fa';
@@ -15,8 +15,6 @@ import {
 } from '../../services/storage/features/conversationSlice';
 import { renameConversation, deleteConversation } from '../../services';
 import { processFolder, cancelProcessFolder } from '../../services/folderApi';
-import UploadTrackingService from '../../services/uploadTracking/uploadTrackingService';
-import { store } from '../../services/storage/store';
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -33,8 +31,6 @@ const ConversationSidebar = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentSession, setCurrentSession] = useState({ id: null, es: null });
-
-  const uploadTrackingRef = useRef(new UploadTrackingService(store));
 
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
@@ -116,13 +112,9 @@ const ConversationSidebar = () => {
         (progress) => setUploadProgress(progress)
       );
 
-      uploadTrackingRef.current.connect(sessionId);
-
       setCurrentSession({ id: sessionId, es: eventSource });
 
       await resultPromise;
-
-      uploadTrackingRef.current.disconnect();
 
       dispatch(generateNewConversationThunk());
       setShowProgressModal(false);
