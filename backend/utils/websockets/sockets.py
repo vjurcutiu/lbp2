@@ -15,6 +15,7 @@ socketio = SocketIO(cors_allowed_origins="*", async_mode='gevent')
 
 @socketio.on('connect', namespace='/upload')
 def handle_connect():
+    print('Request args:', dict(request.args))
     session_id = request.args.get('session_id')
     if session_id:
         join_upload_room(session_id)

@@ -1,28 +1,28 @@
 import socketService from '../../services/websocket/socketService';
 import { uploadStarted, fileUploaded, fileFailed, uploadComplete, resetUpload } from './uploadTrackingSlice';
-import {store} from '../../services/storage/store'
 
 class UploadTrackingService {
-  constructor(store) {
-    this.store = store;
+  constructor() {
+    this.store = undefined;
     this.socket = null;
   }
 
   setStore(store) {
     this.store = store;
   }
+
   connect(sessionId) {
+    if (!this.store) throw new Error('Store not set on UploadTrackingService!');
     console.log('Connecting to upload WebSocket with sessionId:', sessionId);
     if (this.socket) {
       this.socket.disconnect();
     }
     socketService.disconnect();
-    socketService.connect(`http://localhost:5000/upload`, { query: `session_id=${sessionId}` });
+    socketService.connect(`http://localhost:5000/upload?session_id=${sessionId}`);
     this.socket = socketService.socket;
 
     this.socket.on('connect', () => {
       console.log('Connected to upload WebSocket');
-      // Join the room for this session_id to receive room-targeted events
       this.socket.emit('join', { session_id: sessionId });
       console.log('Emitted join room event for session:', sessionId);
     });
@@ -68,17 +68,6 @@ class UploadTrackingService {
       this.socket.disconnect();
       this.socket = null;
     }
-  }
-
-  startUpload(folderPaths, extensions) {
-    // Call the existing folderApi to start the upload, but now use WebSocket for progress
-    // This method should be adapted to your existing API call structure
-    // For example, you might call folderApi.processFolder and then connect to WebSocket with sessionId
-    // This is a placeholder for integration
-  }
-
-  cancelUpload(sessionId) {
-    // Implement cancellation logic if needed, e.g., call folderApi.cancelProcessFolder
   }
 }
 

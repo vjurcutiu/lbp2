@@ -9,6 +9,7 @@ class SocketService {
   // Connect to the Socket.IO server at the provided URL
   connect(url, options = {}) {
     // Always create a new connection, disconnecting existing one if any
+    console.log("Connecting socket to:", url, options);
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

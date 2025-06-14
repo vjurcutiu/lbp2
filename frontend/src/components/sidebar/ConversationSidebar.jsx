@@ -15,6 +15,7 @@ import {
 } from '../../services/storage/features/conversationSlice';
 import { renameConversation, deleteConversation } from '../../services';
 import { processFolder, cancelProcessFolder } from '../../services/folderApi';
+import { uploadTrackingService } from '../../singletons';
 
 const ConversationSidebar = () => {
   const dispatch = useDispatch();
@@ -30,7 +31,7 @@ const ConversationSidebar = () => {
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
-  const [currentSession, setCurrentSession] = useState({ id: null, es: null });
+  const [currentSessionId, setCurrentSessionId] = useState(null);
 
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
@@ -106,39 +107,36 @@ const ConversationSidebar = () => {
       setShowProgressModal(true);
       setUploadProgress(0);
 
-      const { sessionId, eventSource, resultPromise } = await processFolder(
+      // 1. Kick off the job, get sessionId (no singleton call in API)
+      const sessionId = await processFolder(
         folderPath,
-        ['.txt', '.pdf'],
-        (progress) => setUploadProgress(progress)
+        ['.txt', '.pdf']
       );
 
-      setCurrentSession({ id: sessionId, es: eventSource });
+      setCurrentSessionId(sessionId);
 
-      await resultPromise;
+      // 2. Connect the singleton to WS
+      uploadTrackingService.connect(sessionId);
 
-      dispatch(generateNewConversationThunk());
-      setShowProgressModal(false);
-      setCurrentSession({ id: null, es: null });
+      // The rest: wait for upload to complete via Redux state & modal
+      // UI can react to uploadTrackingSlice changes (as before)
+
     } catch (err) {
       console.warn(err.message);
-      uploadTrackingRef.current.disconnect();
       setShowProgressModal(false);
-      setCurrentSession({ id: null, es: null });
+      setCurrentSessionId(null);
     }
   };
 
   const handleCancelUpload = async () => {
-    if (currentSession.es) {
-      currentSession.es.close();
-    }
-    uploadTrackingRef.current.disconnect();
     try {
-      await cancelProcessFolder(currentSession.id);
+      await cancelProcessFolder(currentSessionId);
     } catch (err) {
       console.error('Failed to cancel processing:', err);
     }
     setShowProgressModal(false);
-    setCurrentSession({ id: null, es: null });
+    setCurrentSessionId(null);
+    uploadTrackingService.disconnect();
   };
 
   return (

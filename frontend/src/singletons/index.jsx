@@ -1,5 +1,5 @@
-import { store } from '../storage/store';
-import uploadTrackingService from './uploadTrackingService';
+import { store } from '../services/storage/store';
+import uploadTrackingService from '../features/uploadTracking/uploadTrackingService';
 
 uploadTrackingService.setStore(store);
 

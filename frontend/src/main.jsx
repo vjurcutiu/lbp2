@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import './index.css';
 import {store} from './services/storage/store.js'
 import App from './App.jsx';
+import './singletons/'
 
 const savedTheme = localStorage.getItem('theme');
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
