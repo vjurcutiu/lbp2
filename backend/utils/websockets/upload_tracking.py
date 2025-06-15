@@ -1,8 +1,11 @@
-from flask_socketio import emit, join_room
+from flask_socketio import join_room
 from flask import current_app
 import logging
 import threading
 import time
+
+from utils.websockets.sockets import socketio
+
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,7 @@ def emit_upload_started(session_id, total_files):
         return
     room = session_id
     logger.info(f"Emitting upload_started to session {session_id} with total_files={total_files}")
-    emit('upload_started', {'total_files': total_files}, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('upload_started', {'total_files': total_files}, room=room, namespace='/upload', broadcast=True)
 
 def emit_file_uploaded(session_id, file_name):
     if not client_joined_rooms.get(session_id, False):
@@ -25,7 +28,7 @@ def emit_file_uploaded(session_id, file_name):
         return
     room = session_id
     logger.info(f"Emitting file_uploaded to session {session_id} for file {file_name}")
-    emit('file_uploaded', {'file_name': file_name}, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('file_uploaded', {'file_name': file_name}, room=room, namespace='/upload', broadcast=True)
 
 def emit_file_failed(session_id, file_name, error_message):
     if not client_joined_rooms.get(session_id, False):
@@ -34,7 +37,7 @@ def emit_file_failed(session_id, file_name, error_message):
         return
     room = session_id
     logger.info(f"Emitting file_failed to session {session_id} for file {file_name} with error {error_message}")
-    emit('file_failed', {'file_name': file_name, 'error': error_message}, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('file_failed', {'file_name': file_name, 'error': error_message}, room=room, namespace='/upload', broadcast=True)
 
 def emit_upload_complete(session_id, summary):
     if not client_joined_rooms.get(session_id, False):
@@ -43,7 +46,7 @@ def emit_upload_complete(session_id, summary):
         return
     room = session_id
     logger.info(f"Emitting upload_complete to session {session_id} with summary")
-    emit('upload_complete', summary, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('upload_complete', summary, room=room, namespace='/upload', broadcast=True)
 
 # Buffer to hold events until client joins room: {session_id: [ (event_name, data), ... ]}
 event_buffer = {}
@@ -57,7 +60,7 @@ def flush_buffered_events(session_id):
     if session_id in event_buffer:
         logger.info(f"Flushing buffered events for session {session_id}")
         for event_name, data in event_buffer[session_id]:
-            emit(event_name, data, room=session_id, namespace='/upload', broadcast=True)
+            socketio.emit(event_name, data, room=session_id, namespace='/upload', broadcast=True)
         event_buffer[session_id] = []
 
 def join_upload_room(session_id):

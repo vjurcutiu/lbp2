@@ -2,16 +2,12 @@ from flask_socketio import SocketIO, emit
 import eventlet
 from engineio.async_drivers import gevent
 from flask import request
-from utils.websockets.upload_tracking import (
-    emit_upload_started,
-    emit_file_uploaded,
-    emit_file_failed,
-    emit_upload_complete,
-    join_upload_room,
-)
+
 
 # Create a SocketIO instance with CORS allowed (modify cors_allowed_origins as needed)
 socketio = SocketIO(cors_allowed_origins="*", async_mode='gevent')
+
+from utils.websockets.upload_tracking import join_upload_room
 
 @socketio.on('connect', namespace='/upload')
 def handle_connect(auth):
