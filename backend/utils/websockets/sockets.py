@@ -14,9 +14,9 @@ from utils.websockets.upload_tracking import (
 socketio = SocketIO(cors_allowed_origins="*", async_mode='gevent')
 
 @socketio.on('connect', namespace='/upload')
-def handle_connect():
+def handle_connect(auth):
     print('Request args:', dict(request.args))
-    session_id = request.args.get('session_id')
+    session_id = auth.get('session_id') if auth else None
     if session_id:
         join_upload_room(session_id)
         # Send a test message to client after joining room
@@ -27,6 +27,7 @@ def handle_connect():
 @socketio.on('disconnect', namespace='/upload')
 def handle_disconnect():
     print("Client disconnected from upload namespace")
+
 
 @socketio.on('client_message', namespace='/upload')
 def handle_message(data):

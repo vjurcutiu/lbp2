@@ -114,6 +114,7 @@ const ConversationSidebar = () => {
       );
 
       setCurrentSessionId(sessionId);
+      console.log('session id in sidebar:', sessionId)
 
       // 2. Connect the singleton to WS
       uploadTrackingService.connect(sessionId);

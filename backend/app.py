@@ -19,7 +19,7 @@ from utils.services.ai_api_manager import OpenAIService
 from utils.services.conversation_manager import SocketNotifier, ConversationManager
 
 from routes.chat_routes import create_chat_blueprint
-from features.file_processing.routes.file_processing_routes import file_bp  # *do not* eagerly start MP
+from features.file_processing.file_processing_routes import file_bp  # *do not* eagerly start MP
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
 from routes.api_vault_routes import api_vault_bp
@@ -126,7 +126,7 @@ def register_cli_commands(app: Flask):
 
     @app.cli.command("reprocess-documents")
     def reprocess_documents():
-        from features.file_processing.utils.file_pipeline import upsert_files_to_vector_db
+        from features.file_processing.file_pipeline import upsert_files_to_vector_db
         print("Starting document reprocessing…")
         results = upsert_files_to_vector_db()
         print(f"Successfully processed {len(results)} documents")
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     from multiprocessing import freeze_support, Manager, Pool
     from services.mp_init import set_pool_and_manager
     from services.session_store import SessionStore
-    from features.file_processing.routes.file_processing_routes import set_session_store
+    from features.file_processing.file_processing_routes import set_session_store
 
     freeze_support()
 
