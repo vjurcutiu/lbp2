@@ -18,6 +18,9 @@ class SocketService {
       transports: ['websocket'],
       ...options,
     });
+    if (options.auth) {
+      this.socket.auth = { ...options.auth };
+    }
     this.socket.on('connect', () => {
       console.log('Connected to Socket.IO server');
       // Start sending heartbeat pings every 25 seconds to keep connection alive
