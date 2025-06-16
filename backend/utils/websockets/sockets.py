@@ -10,7 +10,7 @@ socketio = SocketIO(cors_allowed_origins="*", async_mode='gevent')
 from utils.websockets.upload_tracking import join_upload_room
 
 @socketio.on('connect', namespace='/upload')
-def handle_connect(auth):
+def handle_connect(auth = None):
     print('Request args:', dict(request.args))
     session_id = auth.get('session_id') if auth else None
     if session_id:

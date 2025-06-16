@@ -19,7 +19,7 @@ def emit_upload_started(session_id, total_files):
         return
     room = session_id
     logger.info(f"Emitting upload_started to session {session_id} with total_files={total_files}")
-    socketio.emit('upload_started', {'total_files': total_files}, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('upload_started', {'total_files': total_files}, room=room, namespace='/upload')
 
 def emit_file_uploaded(session_id, file_name):
     if not client_joined_rooms.get(session_id, False):
@@ -28,7 +28,7 @@ def emit_file_uploaded(session_id, file_name):
         return
     room = session_id
     logger.info(f"Emitting file_uploaded to session {session_id} for file {file_name}")
-    socketio.emit('file_uploaded', {'file_name': file_name}, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('file_uploaded', {'file_name': file_name}, room=room, namespace='/upload')
 
 def emit_file_failed(session_id, file_name, error_message):
     if not client_joined_rooms.get(session_id, False):
@@ -37,7 +37,7 @@ def emit_file_failed(session_id, file_name, error_message):
         return
     room = session_id
     logger.info(f"Emitting file_failed to session {session_id} for file {file_name} with error {error_message}")
-    socketio.emit('file_failed', {'file_name': file_name, 'error': error_message}, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('file_failed', {'file_name': file_name, 'error': error_message}, room=room, namespace='/upload')
 
 def emit_upload_complete(session_id, summary):
     if not client_joined_rooms.get(session_id, False):
@@ -46,7 +46,7 @@ def emit_upload_complete(session_id, summary):
         return
     room = session_id
     logger.info(f"Emitting upload_complete to session {session_id} with summary")
-    socketio.emit('upload_complete', summary, room=room, namespace='/upload', broadcast=True)
+    socketio.emit('upload_complete', summary, room=room, namespace='/upload')
 
 # Buffer to hold events until client joins room: {session_id: [ (event_name, data), ... ]}
 event_buffer = {}
@@ -60,7 +60,7 @@ def flush_buffered_events(session_id):
     if session_id in event_buffer:
         logger.info(f"Flushing buffered events for session {session_id}")
         for event_name, data in event_buffer[session_id]:
-            socketio.emit(event_name, data, room=session_id, namespace='/upload', broadcast=True)
+            socketio.emit(event_name, data, room=session_id, namespace='/upload')
         event_buffer[session_id] = []
 
 def join_upload_room(session_id):
