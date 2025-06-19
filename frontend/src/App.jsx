@@ -11,10 +11,13 @@ import SettingsTab from './features/settingsTab/SettingsTab';
 import FilesTab from './features/filesTab/FilesTab'
 import ChatTab from './features/chatTab/ChatTab';
 import AppLayout from './components/AppLayout';
+import LoadingScreen from './features/loading/LoadingScreen';
 
 const App = () => {
   const dispatch = useDispatch();
   const flaskPort = useSelector((state) => state.port.flaskPort);
+  const isConnected = useSelector((state) => state.websocket.isConnected);
+
 
   useEffect(() => {
     console.log("First useEffect: determining port value.");
@@ -41,10 +44,14 @@ const App = () => {
     if (flaskPort) {
       console.log('Updating apiClient and socket base URL to port:', flaskPort);
       updateApiClientBaseURL(flaskPort);
-      const socketInstance = connectSocket(flaskPort);
+      const socketInstance = connectSocket(flaskPort, dispatch); // <-- pass dispatch here!
       setupSocketListeners(socketInstance);
     }
-  }, [flaskPort]);
+  }, [flaskPort, dispatch]);
+
+  if (!isConnected) {
+    return <LoadingScreen />;
+  }
 
   return (
     <HashRouter>
