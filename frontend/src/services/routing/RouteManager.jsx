@@ -16,7 +16,7 @@ const RouteManager = () => {
 
   useEffect(() => {
     if (conversationId !== sanitizedConversationId) {
-      navigate(`/conversation/${sanitizedConversationId}`, { replace: true });
+      navigate(`/chat/${sanitizedConversationId}`, { replace: true });
     }
   }, [conversationId, sanitizedConversationId, navigate]);
 

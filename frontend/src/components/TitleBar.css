@@ -36,7 +36,36 @@
   font-weight: normal;
   text-align: center;
 }
+
+.tab-bar button {
+  -webkit-app-region: no-drag;
+}
   
-  .window-controls button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
+.window-controls button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tab-bar {
+display: flex;
+gap: 4px;
+flex: 1;
+}
+
+.tab-btn {
+background: transparent;
+border: none;
+color: #fff;
+padding: 4px 14px;
+border-radius: 5px 5px 0 0;
+font-size: 14px;
+cursor: pointer;
+opacity: 0.75;
+margin-right: 2px;
+transition: background 0.2s, opacity 0.2s;
+}
+
+.tab-btn.active,
+.tab-btn:hover {
+background: #393e46;
+opacity: 1;
+}

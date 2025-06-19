@@ -17,8 +17,8 @@ const NewChat = ({ messages }) => {
   useEffect(() => {
     console.log("useEffect triggered with activeConversationId:", activeConversationId);
     if (activeConversationId) {
-      console.log("Navigating to /conversation/" + activeConversationId);
-      navigate(`/conversation/${activeConversationId}`);
+      console.log("Navigating to /chat/" + activeConversationId);
+      navigate(`/chat/${activeConversationId}`);
     }
   }, [activeConversationId, navigate]);
 

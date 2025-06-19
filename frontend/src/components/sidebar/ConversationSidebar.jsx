@@ -39,7 +39,7 @@ const ConversationSidebar = () => {
 
   const handleNewConversationClick = async () => {
     const newId = await dispatch(generateNewConversationThunk());
-    navigate(`/conversation/${newId}`);
+    navigate(`/chat/${newId}`);
   };
 
   const handleConversationSelect = (conversationId) => {
@@ -185,7 +185,7 @@ const ConversationSidebar = () => {
                 onClick={() => handleConversationSelect(conv.id)}
               >
                 <Link
-                  to={`/conversation/${conv.id}`}
+                  to={`/chat/${conv.id}`}
                   className="flex-1 text-sm"
                 >
                   <span>{conv.title || `Conversation ${conv.id}`}</span>

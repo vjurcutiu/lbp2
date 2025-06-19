@@ -7,7 +7,7 @@ export const NavigationProvider = ({ children }) => {
   const navigate = useNavigate();
 
   const setConversationId = (newConversationId) => {
-    navigate(`/conversation/${newConversationId}`);
+    navigate(`/chat/${newConversationId}`);
   };
 
   return (

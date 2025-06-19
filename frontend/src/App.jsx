@@ -7,7 +7,10 @@ import { updateApiClientBaseURL } from './services/apiClient';
 import { connectSocket } from './services/websocket/socket';
 import { setupSocketListeners } from './services/listeners/socketListeners';
 import { useDispatch, useSelector } from 'react-redux';
-
+import SettingsTab from './features/settingsTab/SettingsTab';
+import FilesTab from './features/filesTab/FilesTab'
+import ChatTab from './features/chatTab/ChatTab';
+import AppLayout from './components/AppLayout';
 
 const App = () => {
   const dispatch = useDispatch();
@@ -45,12 +48,15 @@ const App = () => {
 
   return (
     <HashRouter>
-      <Routes>
-        {/* Define the route pattern for conversations. */}
-        <Route path="/conversation/:conversationId" element={<RouteManager />} />
-        {/* Optionally, redirect root or any other routes to a default conversation. */}
-        <Route path="*" element={<Navigate to="/conversation/new" replace />} />
-      </Routes>
+      <AppLayout>
+        <Routes>
+          {/* Define the route pattern for conversations. */}
+          <Route path="/chat/*" element={<ChatTab />} />
+          <Route path="/files" element={<FilesTab />} />
+          <Route path="/settings" element={<SettingsTab />} />           
+          <Route path="*" element={<Navigate to="/chat/new" replace />} />
+        </Routes>
+      </AppLayout>
     </HashRouter>
   );
 };
