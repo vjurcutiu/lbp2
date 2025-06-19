@@ -20,6 +20,7 @@ def process_folder_task(
 ) -> None:
     """
     Worker process: scans folders, processes files in parallel, and puts websocket events on ws_queue.
+    This version always queries model objects inside worker app contexts to avoid SQLAlchemy threading/session issues.
     """
     import os
     import logging
@@ -51,7 +52,7 @@ def process_folder_task(
     db.init_app(app)
 
     with app.app_context():
-        # Scan phase
+        # --- Scan Phase ---
         logger.info("file_processing_service.process_folder_task: Starting scan phase for folders: %s", folder_paths)
         all_added: List[Any] = []
         for folder in folder_paths:
@@ -69,10 +70,10 @@ def process_folder_task(
         files = all_added
         total = max(len(files), 1)
 
-        # Metadata extraction
+        # --- Metadata Extraction Phase ---
         logger.info("file_processing_service.process_folder_task: Starting metadata extraction phase")
         meta_files = File.query.all()
-        to_process = [f for f in meta_files if f.meta_data is None or (isinstance(f.meta_data, dict) and "keywords" not in f.meta_data)]
+        to_process = [f.id for f in meta_files if f.meta_data is None or (isinstance(f.meta_data, dict) and "keywords" not in f.meta_data)]
         logger.info("file_processing_service.process_folder_task: Files to process for metadata: %d", len(to_process))
         results = []
         app_ctx = Flask(__name__)
@@ -80,65 +81,63 @@ def process_folder_task(
         db_ctx = db
         db_ctx.init_app(app_ctx)
 
-        def process_file_with_context(f):
+        def process_file_with_context(file_id):
             with app_ctx.app_context():
                 try:
+                    f = File.query.get(file_id)
+                    if f is None:
+                        logger.warning("File with id %s not found for metadata processing", file_id)
+                        return (str(file_id), False, "File not found")
                     logger.info("file_processing_service.process_folder_task: Processing file for metadata: %s", f.file_path)
                     result = process_file_for_metadata(f)
+                    db_ctx.session.commit()  # Commit after processing metadata
                     logger.info("file_processing_service.process_folder_task: Successfully processed metadata for: %s", f.file_path)
-                    return (f, True, None)
+                    return (f.file_path, True, None)
                 except Exception as e:
-                    logger.error("file_processing_service.process_folder_task: Error processing file %s: %s", f.file_path, e)
-                    return (f, False, str(e))
+                    db_ctx.session.rollback()
+                    logger.error("file_processing_service.process_folder_task: Error processing file %s: %s", file_id, e)
+                    return (str(file_id), False, str(e))
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             for res in executor.map(process_file_with_context, to_process):
                 results.append(res)
-        with app_ctx.app_context():
-            try:
-                db_ctx.session.commit()
-                logger.info("file_processing_service.process_folder_task: Metadata commit successful")
-            except Exception as e:
-                db_ctx.session.rollback()
-                logger.error("file_processing_service.process_folder_task: Error committing metadata: %s", e)
 
-        # Vector upsert
+        # --- Vector Upsert Phase ---
         logger.info("file_processing_service.process_folder_task: Starting vector upsert phase")
         upsert_files = File.query.filter(File.meta_data.isnot(None), File.is_uploaded == False).all()
-        logger.info("file_processing_service.process_folder_task: Files to upsert to vector DB: %d", len(upsert_files))
+        upsert_file_ids = [f.id for f in upsert_files]
+        logger.info("file_processing_service.process_folder_task: Files to upsert to vector DB: %d", len(upsert_file_ids))
 
-        def upsert_file_with_context(f):
+        def upsert_file_with_context(file_id):
             with app_ctx.app_context():
                 try:
+                    f = File.query.get(file_id)
+                    if f is None:
+                        logger.warning("File with id %s not found for vector upsert", file_id)
+                        return (str(file_id), False, "File not found")
                     logger.info("file_processing_service.process_folder_task: Upserting file to vector DB: %s", f.file_path)
                     result = upsert_file_to_vector_db(f)
+                    db_ctx.session.commit()  # Commit after vector upsert
                     logger.info("file_processing_service.process_folder_task: Successfully upserted: %s", f.file_path)
-                    return (f, True, None)
+                    return (f.file_path, True, None)
                 except Exception as e:
-                    logger.error("file_processing_service.process_folder_task: Error upserting file %s: %s", f.file_path, e)
-                    return (f, False, str(e))
+                    db_ctx.session.rollback()
+                    logger.error("file_processing_service.process_folder_task: Error upserting file %s: %s", file_id, e)
+                    return (str(file_id), False, str(e))
 
         upsert_results = []
         with ThreadPoolExecutor(max_workers=10) as executor:
-            for res in executor.map(upsert_file_with_context, upsert_files):
+            for res in executor.map(upsert_file_with_context, upsert_file_ids):
                 upsert_results.append(res)
-        with app_ctx.app_context():
-            try:
-                db_ctx.session.commit()
-                logger.info("file_processing_service.process_folder_task: Vector upload flags commit successful")
-            except Exception as e:
-                db_ctx.session.rollback()
-                logger.error("file_processing_service.process_folder_task: Error committing vector upload flags: %s", e)
 
-        # Combine results
+        # --- Combine Results, WebSocket Events, and Summary ---
         logger.info("file_processing_service.process_folder_task: Combining results")
         combined_results = {}
-        for f, success, error in results:
-            combined_results[f.file_path] = (success, error)
-        for f, success, error in upsert_results:
-            combined_results[f.file_path] = (success, error)
+        for file_path, success, error in results:
+            combined_results[file_path] = (success, error)
+        for file_path, success, error in upsert_results:
+            combined_results[file_path] = (success, error)
 
-        # Per-file events for websocket
         logger.info("file_processing_service.process_folder_task: Sending per-file websocket events")
         for file_path, (success, error) in combined_results.items():
             ws_queue.put({
@@ -148,7 +147,6 @@ def process_folder_task(
                 "session_id": session_id,
             })
 
-        # Upload complete summary
         total_files = len(combined_results)
         uploaded_files = sum(1 for success, _ in combined_results.values() if success)
         failed_files = [
@@ -162,5 +160,7 @@ def process_folder_task(
             "failed_files": failed_files,
         }
         ws_queue.put({"complete": True, "summary": summary, "session_id": session_id})
-        logger.info("file_processing_service.process_folder_task: Task complete for session %s (total_files=%d, uploaded_files=%d, failed_files=%d)",
-                    session_id, total_files, uploaded_files, len(failed_files))
+        logger.info(
+            "file_processing_service.process_folder_task: Task complete for session %s (total_files=%d, uploaded_files=%d, failed_files=%d)",
+            session_id, total_files, uploaded_files, len(failed_files)
+        )
