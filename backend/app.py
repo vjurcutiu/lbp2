@@ -23,6 +23,8 @@ from features.file_processing.file_processing_routes import file_bp  # *do not* 
 from routes.extra_routes import extra_bp
 from routes.info_routes import info_bp
 from routes.api_vault_routes import api_vault_bp
+from features.kw_gen_tab.routes import kw_gen_tab_bp
+
 
 # ───> RAG integration imports
 from utils.services.agentic.query_processor import QueryProcessor
@@ -106,7 +108,7 @@ def get_free_port(start_port: int = 5000, max_port: int = 5100) -> int:
 def register_blueprints(app: Flask, conv_manager: ConversationManager):
     chat_bp = create_chat_blueprint(conv_manager)
     app.register_blueprint(chat_bp)
-
+    app.register_blueprint(kw_gen_tab_bp)
     app.register_blueprint(file_bp)
     app.register_blueprint(extra_bp, url_prefix="/extra")
     app.register_blueprint(info_bp,  url_prefix="/info")
