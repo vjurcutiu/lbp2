@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchFiles } from './services/fileFetch';
+import { fetchFiles, deleteFile } from './services/fileFetch';
 import { processFolder } from '../../services/folderApi';
 import uploadTrackingService from '../uploadTracking/uploadTrackingService';
 import { resetUpload } from '../uploadTracking/uploadTrackingSlice';
@@ -9,6 +9,7 @@ import Filters from './Filters';
 import FileDetails from './FileDetails';
 import FilesList from './FilesList';
 import FolderBrowseButton from '../../components/sidebar/FolderBrowseButton';
+
 
 const FilesTab = () => {
   const dispatch = useDispatch();
@@ -93,6 +94,16 @@ const FilesTab = () => {
     }
   };
 
+  const handleDelete = async (id) => {
+    try {
+      await deleteFile(id);
+      fetchFiles().then(setFiles);
+      setOptimisticFiles(prev => prev.filter(f => f.id !== id));
+    } catch (err) {
+      alert('Failed to delete file: ' + err.message);
+    }
+  };
+
   const filteredFiles = files.filter(
     file =>
       (filter === 'all' || file.type === filter) &&
@@ -102,8 +113,8 @@ const FilesTab = () => {
   // Merge optimistic files (those not already in backend) to the top
   const backendPaths = new Set(files.map(f => f.file_path));
   const displayedFiles = [
-    ...optimisticFiles.filter(f => !backendPaths.has(f.id)),
-    ...filteredFiles
+    ...optimisticFiles.filter(f => !backendPaths.has(f.id)).map(f => ({ ...f, onDelete: handleDelete })),
+    ...filteredFiles.map(f => ({ ...f, onDelete: handleDelete }))
   ];
 
   if (loading) return <div>Loading files…</div>;

@@ -27,20 +27,42 @@ const FilesList = ({ files, selected, setSelected }) => (
             marginBottom: '0.7rem',
             transition: 'background 0.2s',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <span>{file.name}</span>
-          {(file.status === 'pending' || file.status === 'uploading') && (
-            <span style={{ marginLeft: '0.7rem' }}>
-              <Spinner />
-            </span>
-          )}
-          {file.status === 'error' && (
-            <span style={{ color: 'red', marginLeft: '0.7rem' }}>
-              &#9888; {file.error || 'Failed'}
-            </span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span>{file.name}</span>
+            {(file.status === 'pending' || file.status === 'uploading') && (
+              <span style={{ marginLeft: '0.7rem' }}>
+                <Spinner />
+              </span>
+            )}
+            {file.status === 'error' && (
+              <span style={{ color: 'red', marginLeft: '0.7rem' }}>
+                &#9888; {file.error || 'Failed'}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const confirmed = window.confirm(`Are you sure you want to delete "${file.name}"?`);
+              if (confirmed) {
+                file.onDelete?.(file.id);
+              }
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#888',
+              cursor: 'pointer',
+              fontSize: '1.1rem',
+            }}
+            title="Remove file"
+          >
+            ✖
+          </button>
         </div>
       ))
     ) : (

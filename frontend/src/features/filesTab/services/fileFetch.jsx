@@ -13,3 +13,12 @@ export async function fetchFiles() {
     ...file,
   }));
 }
+
+export async function deleteFile(id) {
+  const res = await fetch(`http://localhost:5000/files/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    throw new Error('Failed to delete file');
+  }
+}
