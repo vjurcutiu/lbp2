@@ -22,3 +22,10 @@ export async function deleteFile(id) {
     throw new Error('Failed to delete file');
   }
 }
+
+export async function fetchFileContent(path) {
+  const res = await fetch(`http://localhost:5000/files/content?path=${encodeURIComponent(path)}`);
+  if (!res.ok) throw new Error('Failed to load file content');
+  const data = await res.json();
+  return data.content;
+}

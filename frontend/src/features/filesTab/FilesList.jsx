@@ -2,7 +2,7 @@
 import React from 'react';
 import Spinner from './Spinner';
 
-const FilesList = ({ files, selected, setSelected }) => (
+const FilesList = ({ files, selected, setSelected, onDoubleClick }) => (  
   <div style={{
     flex: 1,
     background: '#fff',
@@ -12,13 +12,14 @@ const FilesList = ({ files, selected, setSelected }) => (
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column'
-  }}>
+  }}>    
     <h3 style={{ marginBottom: '1.5rem' }}>Files</h3>
     {files.length > 0 ? (
       files.map(file => (
         <div
           key={file.id}
           onClick={() => setSelected(file)}
+          onDoubleClick={() => onDoubleClick?.(file.file_path)}
           style={{
             padding: '1rem',
             borderRadius: '0.8rem',

@@ -1,4 +1,5 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
+import os
 from db.models import File, db
 
 kw_gen_tab_bp = Blueprint('kw_gen_tab', __name__, url_prefix='/files')
@@ -29,3 +30,15 @@ def delete_file(file_id):
     db.session.delete(file)
     db.session.commit()
     return jsonify({"success": True, "deleted_id": file_id}), 200
+
+@kw_gen_tab_bp.route('/content', methods=['GET'])
+def get_file_content():
+    path = request.args.get('path')
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return jsonify({"content": content})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

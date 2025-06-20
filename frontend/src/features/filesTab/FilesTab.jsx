@@ -9,7 +9,7 @@ import Filters from './Filters';
 import FileDetails from './FileDetails';
 import FilesList from './FilesList';
 import FolderBrowseButton from '../../components/sidebar/FolderBrowseButton';
-
+import FileViewerModal from './FileViewerModal';
 
 const FilesTab = () => {
   const dispatch = useDispatch();
@@ -19,6 +19,8 @@ const FilesTab = () => {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [optimisticFiles, setOptimisticFiles] = useState([]);
+  const [viewerPath, setViewerPath] = useState(null);
+
 
   const { uploadedFiles, failedFiles, isComplete } = useSelector(
     state => state.uploadTracking
@@ -126,6 +128,13 @@ const FilesTab = () => {
       minHeight: '100vh',
       fontFamily: 'Inter, sans-serif'
     }}>
+      {viewerPath && (
+        <FileViewerModal
+          filePath={viewerPath}
+          onClose={() => setViewerPath(null)}
+        />
+      )}
+
       <input
         type="text"
         placeholder="Search files..."
@@ -159,6 +168,7 @@ const FilesTab = () => {
           files={displayedFiles}
           selected={selected}
           setSelected={setSelected}
+          onDoubleClick={setViewerPath}
         />
       </div>
     </div>
