@@ -36,6 +36,11 @@ const FilesList = ({ files, selected, setSelected }) => (
               <Spinner />
             </span>
           )}
+          {file.status === 'error' && (
+            <span style={{ color: 'red', marginLeft: '0.7rem' }}>
+              &#9888; {file.error || 'Failed'}
+            </span>
+          )}
         </div>
       ))
     ) : (

@@ -41,9 +41,24 @@ const FilesTab = () => {
   // Remove optimistic file if it is confirmed by backend (matching id)
   useEffect(() => {
     if (files.length === 0 || optimisticFiles.length === 0) return;
-    const backendIds = new Set(files.map(f => f.id));
-    setOptimisticFiles(prev => prev.filter(f => !backendIds.has(f.id)));
+    const backendPaths = new Set(files.map(f => f.file_path));
+    setOptimisticFiles(prev => prev.filter(f => !backendPaths.has(f.id)));
   }, [files]);
+
+  // Sync optimistic file status with Redux upload tracking
+  useEffect(() => {
+    if (optimisticFiles.length === 0) return;
+    setOptimisticFiles(prev => prev.map(file => {
+      if (uploadedFiles.includes(file.name)) {
+        return { ...file, status: 'complete' };
+      }
+      const failed = failedFiles.find(f => f.fileName === file.name);
+      if (failed) {
+        return { ...file, status: 'error', error: failed.error };
+      }
+      return file;
+    }));
+  }, [uploadedFiles, failedFiles]);
 
   const handleFolderSelect = async (folderPathOrFiles) => {
     let selectedPaths = [];
@@ -59,7 +74,7 @@ const FilesTab = () => {
     setOptimisticFiles(prev => [
       ...selectedPaths.map(path => ({
         id: path,
-        name: path.split(/[\\/]/).pop(),
+        name: path.split(/[\\/]/).pop().replace(/\.[^/.]+$/, ''),
         status: 'pending',
       })),
       ...prev
@@ -85,9 +100,9 @@ const FilesTab = () => {
   );
 
   // Merge optimistic files (those not already in backend) to the top
-  const backendFileIds = new Set(files.map(f => f.id));
+  const backendPaths = new Set(files.map(f => f.file_path));
   const displayedFiles = [
-    ...optimisticFiles.filter(f => !backendFileIds.has(f.id)),
+    ...optimisticFiles.filter(f => !backendPaths.has(f.id)),
     ...filteredFiles
   ];
 

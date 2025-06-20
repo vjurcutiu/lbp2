@@ -6,7 +6,7 @@ export async function fetchFiles() {
   // Format the data for the FilesTab component
   return files.map(file => ({
     id: file.id,
-    name: file.file_path.split('/').pop(),
+    name: file.file_path.split(/[\\/]/).pop().replace(/\.[^/.]+$/, ''),
     type: file.file_extension.toUpperCase(),
     size: file.meta_data?.size || 'Unknown',
     uploaded: file.created_at ? file.created_at.split('T')[0] : '',
