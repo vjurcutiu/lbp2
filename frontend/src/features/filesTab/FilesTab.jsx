@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchFiles, deleteFile } from './services/fileFetch';
 import { processFolder } from '../../services/folderApi';
@@ -15,12 +14,12 @@ const FilesTab = () => {
   const dispatch = useDispatch();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [optimisticFiles, setOptimisticFiles] = useState([]);
   const [viewerPath, setViewerPath] = useState(null);
-
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [selectedKeyword, setSelectedKeyword] = useState(null);
 
   const { uploadedFiles, failedFiles, isComplete } = useSelector(
     state => state.uploadTracking
@@ -106,17 +105,66 @@ const FilesTab = () => {
     }
   };
 
-  const filteredFiles = files.filter(
-    file =>
-      (filter === 'all' || file.type === filter) &&
-      file.name.toLowerCase().includes(search.toLowerCase())
-  );
+  // ---- Topic and Keyword Extraction for Filters ----
+  const allTopics = useMemo(() => {
+    const topicsSet = new Set();
+    files.forEach(f => {
+      if (f.topics) Object.keys(f.topics).forEach(topic => topicsSet.add(topic));
+    });
+    return Array.from(topicsSet);
+  }, [files]);
 
-  // Merge optimistic files (those not already in backend) to the top
+  const keywordsForSelectedTopic = useMemo(() => {
+    if (!selectedTopic) return [];
+    const keywordsSet = new Set();
+    files.forEach(f => {
+      if (f.topics && f.topics[selectedTopic]) {
+        const val = f.topics[selectedTopic];
+        if (Array.isArray(val)) val.forEach(x => keywordsSet.add(x));
+        else if (val) keywordsSet.add(val);
+      }
+    });
+    return Array.from(keywordsSet);
+  }, [files, selectedTopic]);
+
+  // ---- Filtering Logic ----
+  const filteredFiles = files.filter(file => {
+    // Topic & keyword filter
+    if (selectedTopic) {
+      const values = file.topics && file.topics[selectedTopic]
+        ? (Array.isArray(file.topics[selectedTopic]) ? file.topics[selectedTopic] : [file.topics[selectedTopic]])
+        : [];
+      if (selectedKeyword && !values.includes(selectedKeyword)) {
+        return false;
+      }
+      if (!selectedKeyword && (!values.length || !values.some(Boolean))) {
+        return false; // If topic is set but file has no value for it
+      }
+    }
+    // Search
+    if (search && !file.name.toLowerCase().includes(search.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
+
+  // ---- Sorting: order by selected topic ----
+  const sortedFiles = useMemo(() => {
+    if (!selectedTopic) return filteredFiles;
+    return [...filteredFiles].sort((a, b) => {
+      const aVal = a.topics && a.topics[selectedTopic];
+      const bVal = b.topics && b.topics[selectedTopic];
+      const aStr = Array.isArray(aVal) ? (aVal[0] || '') : (aVal || '');
+      const bStr = Array.isArray(bVal) ? (bVal[0] || '') : (bVal || '');
+      return aStr.localeCompare(bStr);
+    });
+  }, [filteredFiles, selectedTopic]);
+
+  // ---- Merge optimistic files to the top ----
   const backendPaths = new Set(files.map(f => f.file_path));
   const displayedFiles = [
     ...optimisticFiles.filter(f => !backendPaths.has(f.id)).map(f => ({ ...f, onDelete: handleDelete })),
-    ...filteredFiles.map(f => ({ ...f, onDelete: handleDelete }))
+    ...sortedFiles.map(f => ({ ...f, onDelete: handleDelete }))
   ];
 
   if (loading) return <div>Loading files…</div>;
@@ -156,7 +204,17 @@ const FilesTab = () => {
           onError={err => alert('File selection error: ' + err.message)}
         />
       </div>
-      <Filters setFilter={setFilter} />
+      <Filters
+        topics={allTopics}
+        selectedTopic={selectedTopic}
+        setSelectedTopic={val => {
+          setSelectedTopic(val);
+          setSelectedKeyword(null); // reset keyword if topic changes
+        }}
+        keywords={keywordsForSelectedTopic}
+        selectedKeyword={selectedKeyword}
+        setSelectedKeyword={setSelectedKeyword}
+      />
       <div style={{
         display: 'flex',
         gap: '2rem',

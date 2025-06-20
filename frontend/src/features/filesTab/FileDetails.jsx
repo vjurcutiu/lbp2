@@ -16,6 +16,18 @@ const FileDetails = ({ file }) => (
         <p><b>Type:</b> {file.type}</p>
         <p><b>Size:</b> {file.size}</p>
         <p><b>Uploaded:</b> {file.uploaded}</p>
+        {file.topics && Object.keys(file.topics).length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <b>Topics & Keywords:</b>
+            <ul style={{ paddingLeft: 16 }}>
+              {Object.entries(file.topics).map(([topic, kws]) => (
+                <li key={topic}>
+                  <b>{topic}:</b> {Array.isArray(kws) ? kws.join(', ') : kws}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </>
     ) : (
       <p style={{ color: '#777' }}>Select a file to see details.</p>
